@@ -3,24 +3,47 @@ use strict;
 use warnings;
 no warnings 'uninitialized';
 
+use blib;
 use ConfigReader::Simple;
 use Data::Dumper;
+use Data::UUID;
 use File::Basename;
 use File::Find;
 use File::Find::Closures qw(find_by_regex);
 use File::Spec::Functions qw(catfile);
-
+use Parallel::ForkManager;
 use Log::Log4perl qw(:easy);
 use YAML;
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# The Set up
-Log::Log4perl->init_and_watch( 'backpan_indexer.log4perl', 30 );
+# Choose something to uniquely identify this run
+my $UUID = do { 
+	my $ug = Data::UUID->new; 
+	my $uuid = $ug->create;
+	$ug->to_string( $uuid );
+	};
 
-my $Config = ConfigReader::Simple->new( 'backpan_indexer.config',
-	[ qw(temp_dir backpan_dir report_dir alarm copy_bad_dists retry_errors) ]
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Minutely control the environment
+foreach my $key ( keys %ENV ) { delete $ENV{$key} }
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# The set up
+my $run_dir = dirname( $0 );
+
+Log::Log4perl->init_and_watch( 
+	catfile( $run_dir, 'backpan_indexer.log4perl' ), 
+	30 
 	);
-die "Could not read config!\n" unless ref $Config;
+
+my $conf    = catfile( $run_dir, 'backpan_indexer.config' );
+DEBUG( "Run dir is $run_dir; Conf file is $conf" );
+
+my $Config = ConfigReader::Simple->new( $conf,
+	[ qw(temp_dir backpan_dir report_dir alarm 
+		copy_bad_dists retry_errors indexer_class) ]
+	);
+FATAL "Could not read config!\n" unless ref $Config;
 
 chdir $Config->temp_dir;
 
@@ -29,8 +52,8 @@ $ENV{AUTOMATED_TESTING}++;
 my $yml_dir       = catfile( $Config->report_dir, "meta"        );
 my $yml_error_dir = catfile( $Config->report_dir, "meta-errors" );
 
-print "Value of rtry is ", $Config->retry_errors , "\n";
-print "Value of copy_bad_dists is ", $Config->copy_bad_dists , "\n";
+DEBUG( "Value of retry is " . $Config->retry_errors );
+DEBUG( "Value of copy_bad_dists is " . $Config->copy_bad_dists );
 
 if( $Config->retry_errors )
 	{
@@ -68,20 +91,26 @@ my @dists = do {
 # The meat of the issue
 INFO( "Run started - " . @dists . " dists to process" );
 
+my $forker = Parallel::ForkManager->new( $Config->parallel_jobs || 1 );
+
+my $start = time;
 my $count = 0;
 foreach my $dist ( @dists )
 	{
-	DEBUG( "[dist #$count] Parent [$$] processing $dist\n" );
-	chomp $dist;
-
-	if( my $pid = fork ) { waitpid $pid, 0 }
-	else                 { child_tasks( $dist ); exit }
-
 	$count++;
+	my $parent = $$;
+	my $pid = $forker->start and next; 
+
+	DEBUG( "[dist #$count] Parent [$parent] processing $dist" );
+	child_tasks( $dist );
+
+	$forker->finish;
 	}
+my $end = time;
+my $diff = $end - $start;
  
 INFO( "Run ended - $count dists processed" );
-
+INFO( "Total time: $diff seconds" );
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -95,7 +124,9 @@ sub child_tasks
 	
 	DEBUG( "Child [$$] processing $dist\n" );
 		
-	require MyCPAN::Indexer;
+	my $Indexer = $Config->indexer_class || 'MyCPAN::Indexer';
+	
+	eval "require $Indexer" or die;
 	
 	unless( chdir $Config->temp_dir )
 		{
@@ -107,7 +138,7 @@ sub child_tasks
 	
 	local $SIG{ALRM} = sub { die "alarm\n" };
 	alarm( $Config->alarm || 15 );
-	my $info = eval { MyCPAN::Indexer->run( $dist ) };
+	my $info = eval { $Indexer->run( $dist ) };
 
 	unless( defined $info )
 		{
@@ -141,6 +172,8 @@ sub child_tasks
 		
 	alarm 0;
 			
+	add_run_info( $info );
+	
 	my $out_path = catfile( $out_dir, "$basename.yml" );
 	
 	open my($fh), ">", $out_path or die "Could not open $out_path: $!\n";
@@ -165,4 +198,23 @@ sub check_for_previous_result
 		}
 		
 	return $basename;
+	}
+
+sub add_run_info
+	{
+	my( $info ) = shift;
+	
+	return unless eval { $info->can( 'set_run_info' ) };
+	
+	$info->set_run_info( $_, $Config->get( $_ ) ) 
+		foreach ( $Config->directives );
+	
+	$info->set_run_info( 'uuid', $UUID ); 
+
+	$info->set_run_info( 'child_pid',  $$ ); 
+	$info->set_run_info( 'parent_pid', getppid ); 
+
+	$info->set_run_info( 'ENV', \%ENV ); 
+	
+	return 1;
 	}

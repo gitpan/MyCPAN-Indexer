@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION);
 
-$VERSION = '0.10_02';
+$VERSION = '0.11_01';
 
 =head1 NAME
 
@@ -29,6 +29,7 @@ use Data::Dumper;
 use File::Basename;
 use File::Path;
 use Log::Log4perl qw(:easy);
+use Probe::Perl;
 
 __PACKAGE__->run( @ARGV ) unless caller;
 
@@ -45,7 +46,7 @@ sub run
 
 	my $class = shift;
 	
-	my $self = bless { dist_info => {} }, $class;
+	my $self = bless {}, $class;
 
 	$self->setup_run_info;
 
@@ -92,6 +93,7 @@ my @methods = (
 	[ 'get_file_list',      'Could not get file list',           1 ],
 	[ 'parse_meta_files',   "Could not parse META.yml!",         0 ],
 	[ 'find_modules',       "Could not find modules!",           1 ],
+	[ 'find_tests',         "Could not find tests!",             0 ],
 	);
 
 sub examine_dist
@@ -114,6 +116,7 @@ sub examine_dist
 			}
 		}
 
+	{
 	my @file_info = ();
 	foreach my $file ( @{ $_[0]->dist_info( 'modules' ) } )
 		{
@@ -123,6 +126,19 @@ sub examine_dist
 		}
 
 	$_[0]->set_dist_info( 'module_info', [ @file_info ] );
+	}
+	
+	{
+	my @file_info = ();
+	foreach my $file ( @{ $_[0]->dist_info( 'tests' ) } )
+		{
+		DEBUG( "Processing test $file" );
+		my $hash = $_[0]->get_test_info( $file );
+		push @file_info, $hash;
+		}
+
+	$_[0]->set_dist_info( 'test_info', [ @file_info ] );
+	}
 
 	return 1;
 	}
@@ -159,11 +175,25 @@ sub setup_run_info
 	{
 	TRACE( sub { get_caller_info } );
 
+	require Config;
+	
+	my $perl = Probe::Perl->new;
+	
 	$_[0]->set_run_info( 'root_working_dir', cwd()   );
 	$_[0]->set_run_info( 'run_start_time',   time    );
 	$_[0]->set_run_info( 'completed',        0       );
 	$_[0]->set_run_info( 'pid',              $$      );
 	$_[0]->set_run_info( 'ppid',             getppid );
+
+	$_[0]->set_run_info( 'indexer',          ref $_[0] );
+	$_[0]->set_run_info( 'indexer_versions', $_[0]->VERSION );
+
+	$_[0]->set_run_info( 'perl_version',     $perl->perl_version );
+	$_[0]->set_run_info( 'perl_path',        $perl->find_perl_interpreter );
+	$_[0]->set_run_info( 'perl_config',      \%Config::Config );
+	
+	$_[0]->set_run_info( 'operating_system', $^O );
+	$_[0]->set_run_info( 'operating_system_type', $perl->os_type );
 
 	return 1;
 	}
@@ -235,10 +265,11 @@ sub setup_dist_info
 	my( $self, $dist ) = @_;
 
 	DEBUG( "Setting dist [$dist]\n" );
-	$self->set_dist_info( 'dist_file',     $dist            );
-	$self->set_dist_info( 'dist_size',     -s $dist         );
-	$self->set_dist_info( 'dist_basename', basename($dist)  );
-	$self->set_dist_info( 'dist_date',    (stat($dist))[9]  );
+	$self->set_dist_info( 'dist_file',     $dist                   );
+	$self->set_dist_info( 'dist_size',     -s $dist                );
+	$self->set_dist_info( 'dist_basename', basename($dist)         );
+	$self->set_dist_info( 'dist_date',    (stat($dist))[9]         );
+	$self->set_dist_info( 'dist_md5',     $self->get_md5( $dist )  );
 	DEBUG( "dist size " . $self->dist_info( 'dist_size' ) .
 		" dist date " . $self->dist_info( 'dist_date' )
 		);
@@ -471,13 +502,14 @@ sub get_file_list
 	require ExtUtils::Manifest;
 
 	my $manifest = [ sort keys %{ ExtUtils::Manifest::manifind() } ];
+	DEBUG( "manifest is [ ", join( "|", @$manifest ), " ]" );
+	$_[0]->set_dist_info( 'manifest', [ @$manifest ] );
 
 	my @file_info = map { 
 		DEBUG( "Getting file info for $_" );
 		$_[0]->get_file_info( $_ ) 
 		} @$manifest;
 
-	$_[0]->set_dist_info( 'manifest', $manifest );
 	$_[0]->set_dist_info( 'manifest_file_info', [ @file_info ] );
 	
 	$manifest;
@@ -493,8 +525,6 @@ hash. Returns the hash reference.
 sub get_file_info
 	{
 	TRACE( sub { get_caller_info } );
-
-	require MD5;
 	
 	my( $self, $file ) = @_;
 	
@@ -502,17 +532,19 @@ sub get_file_info
 	my $hash = { name => $file };
 
 	# file digest
-	{
-	my $context = MD5->new;
-	$context->add( $file );
-	$hash->{md5} = $context->hexdigest;
-	}
+	$hash->{md5} = $self->get_md5( $file );
 
 	# mtime
 	$hash->{mtime} = ( stat $file )[9];
 
 	# file size
 	$hash->{bytesize} = -s _;
+	
+	# file magic
+	$hash->{file_mime_type} = $self->file_magic( $file );
+	
+	# line count signature
+	$hash->{line_count} = $self->count_lines( $file );
 	
 	$hash;
 	}
@@ -620,6 +652,10 @@ sub parse_meta_files
 
 =item find_modules
 
+Find the module files. First, look in C<blib/>. IF there are no files in 
+C<blib/>, look in C<lib/>. IF there are still none, look in the currnet
+working directory.
+
 =cut
 
 sub find_modules
@@ -641,6 +677,33 @@ sub find_modules
 		}
 		
 	return;
+	}
+
+=item find_tests
+
+Find the test files. Look for C<test.pl> or C<.t> files under C<t/>.
+
+=cut
+
+sub find_tests
+	{
+	TRACE( sub { get_caller_info } );
+
+	require File::Find::Closures;
+	require File::Find;
+	
+	my @tests;
+	
+	push @tests, 'test.pl' if -e 'test.pl';
+	
+	my( $wanted, $reporter ) = File::Find::Closures::find_by_regex( qr/\.t$/ );
+	File::Find::find( $wanted, "t" );
+	
+	push @tests, $reporter->();
+	
+	$_[0]->set_dist_info( 'tests', [ @tests ] );
+	
+	return scalar @tests;
 	}
 	
 =item run_build_file
@@ -797,6 +860,7 @@ sub get_module_info
 
 	require Module::Extract::VERSION;
 	require Module::Extract::Namespaces;
+	require Module::Extract::Use;
 	
 	my( $self, $file ) = @_;
 	DEBUG( "get_module_info called with [$file]\n" );
@@ -811,11 +875,100 @@ sub get_module_info
 	my $first_package = Module::Extract::Namespaces->from_file( $file );
 
 	$hash->{packages} = [ @packages ];
-
 	$hash->{primary_package} = $first_package;
 
+	my @uses = Module::Extract::Use->get_modules( $file );
+	$hash->{uses} = [ @uses ];
+	
 	$hash;
 	}
+
+=item get_test_info( FILE )
+
+Collect meta informantion and package information about a test 
+file. It starts by calling C<get_file_info>, then adds more to 
+the hash, including the version and package information.
+
+=cut
+
+sub get_test_info
+	{
+	TRACE( sub { get_caller_info } );
+
+	require Module::Extract::Use;
+	
+	my( $self, $file ) = @_;
+	DEBUG( "get_module_info called with [$file]\n" );
+
+	my $hash = $self->get_file_info( $file );
+
+	my @uses = Module::Extract::Use->get_modules( $file );
+	$hash->{uses} = [ @uses ];
+	
+	$hash;
+	}
+
+=item count_lines( FILE )
+
+=cut
+
+sub count_lines
+	{
+	TRACE( sub { get_caller_info } );
+
+	my( $self, $file ) = @_;
+
+	my $class = 'SourceCode::LineCounter::Perl';
+	
+	eval { eval "require $class" } or return;
+	
+	$self->set_run_info( 'line_counter_class', $class );
+	$self->set_run_info( 'line_counter_version', $class->VERSION ); 
+	
+	DEBUG( "Counting lines in $file" );
+	ERROR( "File [$file] does not exist" ) unless -e $file;
+	
+	my $counter = $class->new;
+	$counter->count( $file );
+	
+	my $hash = {
+		map { $_ => $counter->$_() }
+		qw( total code comment documentation blank )
+		};
+		
+	return $hash;
+	}
+
+=item file_magic( FILE )
+
+Guesses and returns the MIME type for the file. 
+
+=cut
+
+sub file_magic
+	{
+	TRACE( sub { get_caller_info } );
+	
+	my( $self, $file ) = @_;
+
+	my $class = "File::MMagic";
+	
+	eval { eval "require $class" } or return;
+
+	$self->set_run_info( 'file_magic_class',   $class );
+	$self->set_run_info( 'file_magic_version', $class->VERSION ); 
+	
+	$class->new->checktype_filename( $file );
+	}
+	
+=back
+
+=head2 Utility functions
+
+These functions aren't related to examining a distribution
+directly.
+
+=over 4
 
 =item cleanup
 
@@ -883,6 +1036,19 @@ sub get_caller_info
 	$filename = File::Basename::basename( $filename );
 	
 	return join " : ", $package, $filename, $line, $subroutine;
+	}
+	
+=item get_md5
+
+=cut
+
+sub get_md5
+	{
+	require MD5;
+	
+	my $context = MD5->new;
+	$context->add( $_[1] );
+	$context->hexdigest;
 	}
 	
 =back
