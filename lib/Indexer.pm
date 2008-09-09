@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION);
 
-$VERSION = '0.11_01';
+$VERSION = '0.15_01';
 
 =head1 NAME
 
@@ -1063,14 +1063,11 @@ sub get_md5
 
 =back
 
-=head1 SEE ALSO
-
-
 =head1 SOURCE AVAILABILITY
 
-I have this code in a Git repository, which I haven't made available
-in a convenient, public way yet. If you want to clone the Git repo,
-ask me and we'll work out something.
+This code is in Github:
+
+	git://github.com/briandfoy/mycpan-indexer.git
 
 =head1 AUTHOR
 
