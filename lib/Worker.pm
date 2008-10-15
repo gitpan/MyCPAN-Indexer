@@ -2,9 +2,12 @@ package MyCPAN::Indexer::Worker;
 use strict;
 use warnings;
 
+use vars qw($VERSION $logger);
+$VERSION = '1.16_02';
+
 use File::Basename;
 use File::Spec::Functions qw(catfile);
-use Log::Log4perl qw(:easy);
+use Log::Log4perl;
 use MyCPAN::Indexer;
 use YAML;
 
@@ -22,22 +25,32 @@ Use this in backpan_indexer.pl by specifying it as the queue class:
 =head1 DESCRIPTION
 
 This class takes a distribution and analyses it. This is what the dispatcher
-hands a disribution too.
+hands a disribution to for the actual indexing.
 
 =head2 Methods
 
 =over 4
 
-=item get_task( $Config )
+=item get_task( $Notes )
 
+C<get_task> sets the C<child_task> key in the C<$Notes> hash reference. The
+value is a code reference that takes a distribution path as its only 
+argument and indexes that distribution.
+
+See L<MyCPAN::Indexer::Tutorial> for details about what C<get_task> expects
+and should do.
 
 =cut
    
+BEGIN {
+	$logger = Log::Log4perl->get_logger( 'Worker' );
+	}
+	
 sub get_task
 	{
 	my( $class, $Notes ) = @_;
 	
-	sub {
+	$Notes->{child_task} = sub {
 		my $dist = shift;
 		
 		my $basename = $class->_check_for_previous_result( $dist, $Notes );
@@ -45,7 +58,7 @@ sub get_task
 		
 		my $Config = $Notes->{config};
 		
-		INFO( "Child [$$] processing $dist\n" );
+		$logger->warn( "Child [$$] processing $dist\n" );
 			
 		my $Indexer = $Config->indexer_class || 'MyCPAN::Indexer';
 		
@@ -53,15 +66,9 @@ sub get_task
 		
 		unless( chdir $Config->temp_dir )
 			{
-			ERROR( "Could not change to " . $Config->temp_dir . " : $!\n" );
+			$logger->error( "Could not change to " . $Config->temp_dir . " : $!\n" );
 			exit 255;
 			}
-	
-		# XXX: this should be configurable
-		my $yml_dir       = catfile( $Config->report_dir, "meta"        );
-		my $yml_error_dir = catfile( $Config->report_dir, "meta-errors" );
-
-		my $out_dir = $yml_error_dir;
 		
 		local $SIG{ALRM} = sub { die "alarm\n" };
 		alarm( $Config->alarm || 15 );
@@ -69,48 +76,61 @@ sub get_task
 	
 		unless( defined $info )
 			{
-			ERROR( "run failed: $@" );
+			$logger->error( "run failed: $@" );
 			return;
 			}
-		elsif( eval { $info->run_info( 'completed' ) } )
+		elsif( ! eval { $info->run_info( 'completed' ) } )
 			{
-			$out_dir = $yml_dir;
-			}
-		else
-			{
-			ERROR( "$basename did not complete\n" );
-			if( my $bad_dist_dir = $Config->copy_bad_dists )
-				{
-				my $dist_file = $info->dist_info( 'dist_file' );
-				my $basename  = $info->dist_info( 'dist_basename' );
-				my $new_name  = catfile( $bad_dist_dir, $basename );
-				
-				unless( -e $new_name )
-					{
-					DEBUG( "Copying bad dist" );
-					open my($in), "<", $dist_file;
-					open my($out), ">", $new_name;
-					while( <$in> ) { print { $out } $_ }
-					close $in;
-					close $out;
-					}
-				}	
+			$logger->error( "$basename did not complete\n" );
+			$class->_copy_bad_dist( $Notes, $info ) if $Config->copy_bad_dists;
 			}
 			
 		alarm 0;
 				
 		$class->_add_run_info( $info, $Notes );
 		
-		my $out_path = catfile( $out_dir, "$basename.yml" );
+		$Notes->{reporter}->( $Notes, $info );
 		
-		open my($fh), ">", $out_path or die "Could not open $out_path: $!\n";
-		print $fh Dump( $info );
-		
-		DEBUG( "Child [$$] process done" );
+		$logger->debug( "Child [$$] process done" );
 		
 		1;
 		};
 		
+	}
+
+sub _copy_bad_dist
+	{
+	my( $class, $Notes, $info ) = @_;
+	
+	if( my $bad_dist_dir = $Notes->{config}->copy_bad_dists )
+		{
+		my $dist_file = $info->dist_info( 'dist_file' );
+		my $basename  = $info->dist_info( 'dist_basename' );
+		my $new_name  = catfile( $bad_dist_dir, $basename );
+		
+		unless( -e $new_name )
+			{
+			$logger->debug( "Copying bad dist" );
+			
+			my( $in, $out );
+			
+			unless( open $in, "<", $dist_file )
+				{
+				$logger->fatal( "Could not open bad dist to $dist_file: $!" );
+				return;
+				}
+
+			unless( open $out, ">", $new_name )
+				{
+				$logger->fatal( "Could not copy bad dist to $new_name: $!" );
+				return;
+				}
+				
+			while( <$in> ) { print { $out } $_ }
+			close $in;
+			close $out;
+			}
+		}	
 	}
 	
 sub _check_for_previous_result
@@ -121,15 +141,15 @@ sub _check_for_previous_result
 	
 	( my $basename = basename( $dist ) ) =~ s/\.(tgz|tar\.gz|zip)$//;
 
-	my $yml_dir       = catfile( $Config->report_dir, "meta"        );
-	my $yml_error_dir = catfile( $Config->report_dir, "meta-errors" );
+	my $yml_dir        = catfile( $Config->report_dir, "meta"        );
+	my $yml_error_dir  = catfile( $Config->report_dir, "meta-errors" );
 	
 	my $yml_path       = catfile( $yml_dir,       "$basename.yml" );
 	my $yml_error_path = catfile( $yml_error_dir, "$basename.yml" );
 	
 	if( my @path = grep { -e } ( $yml_path, $yml_error_path ) )
 		{
-		DEBUG( "Found run output for $basename in $path[0]. Skipping...\n" );
+		$logger->debug( "Found run output for $basename in $path[0]. Skipping...\n" );
 		return;
 		}
 		
@@ -162,7 +182,7 @@ sub _add_run_info
 
 =head1 SEE ALSO
 
-MyCPAN::Indexer
+MyCPAN::Indexer, MyCPAN::Indexer::Tutorial
 
 =head1 SOURCE AVAILABILITY
 

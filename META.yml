@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                MyCPAN-Indexer
-version:             0.15_01
+version:             1.16_02
 abstract:            Index a Perl distribution
 license:             perl
 author:              
@@ -9,6 +9,7 @@ generated_by:        ExtUtils::MakeMaker version 6.44
 distribution_type:   module
 requires:     
     Archive::Extract:              0
+    Curses:                        0
     Distribution::Guess::BuildSystem: 0
     File::Find:                    0
     File::Find::Closures:          0

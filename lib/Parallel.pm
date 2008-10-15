@@ -2,7 +2,10 @@ package MyCPAN::Indexer::Dispatch::Parallel;
 use strict;
 use warnings;
 
-use Log::Log4perl qw(:easy);
+use vars qw($VERSION $logger);
+$VERSION = '1.16_02';
+
+use Log::Log4perl;
 
 BEGIN {
 	# override since Tk overrides exit and this needs the real exit
@@ -22,6 +25,10 @@ BEGIN {
 	  return 0;
 	}
 }
+
+BEGIN {
+	$logger = Log::Log4perl->get_logger( 'Dispatcher' );
+	}
 
 =head1 NAME
 
@@ -99,7 +106,11 @@ sub _make_interface_callback
 	$Notes->{interface_callback} = sub {
 		$class->_remove_old_processes( $Notes );
 
-		return unless $Notes->{Left};
+		unless( $Notes->{Left} )
+			{
+			$Notes->{dispatcher}->wait_all_children;
+			return;
+			};
 
 		$Notes->{_started} ||= time;
 
@@ -126,7 +137,7 @@ sub _make_interface_callback
 			{ # child
 			$Notes->{child_task}( $item );
 			$Notes->{dispatcher}->finish;
-			ERROR( "The child [$$] is still running!" )
+			$logger->error( "The child [$$] is still running!" )
 			}
 	
 		1;
@@ -140,8 +151,8 @@ sub _remove_old_processes
 	my @delete_indices = grep 
 		{ ! kill 0, $Notes->{PID}[$_] } 
 		0 .. $#{ $Notes->{PID} };
-	
-	foreach my $index ( @delete_indices )
+		
+	foreach my $index ( reverse @delete_indices )
 		{
 		splice @{ $Notes->{recent} }, $index, 1;
 		splice @{ $Notes->{PID} }, $index, 1;
@@ -176,7 +187,7 @@ sub _elapsed
 
 =head1 SEE ALSO
 
-MyCPAN::Indexer
+MyCPAN::Indexer, MyCPAN::Indexer::Tutorial
 
 =head1 SOURCE AVAILABILITY
 

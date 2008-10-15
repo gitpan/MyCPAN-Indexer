@@ -1,3 +1,10 @@
+package MyCPAN::Indexer::Tutorial;
+use strict;
+use warnings;
+
+use vars qw($VERSION);
+$VERSION = '1.16_02';
+
 =head1 NAME
 
 MyCPAN::Indexer::Tutorial - How the backpan_indexer.pl pieces fit together
@@ -66,6 +73,27 @@ Expects in C<$Notes>
 To Do: There should be a storage class which the worker class hands
 the results to.
 
+=head1 The Reporter class
+
+The Reporter class implements the bits to store the result of the
+Worker class. C<backpan_indexer.pl> calls C<get_storer> with a reference to its
+C<$Notes> hash.
+
+Implements:
+
+	get_reporter( $Notes, $info )
+	
+Creates in C<$Notes>:
+
+	reporter - the code ref to handle storing the information
+	
+Expects in C<$Notes>:
+
+	config
+	
+Expects in config:
+
+	
 =head1 The Dispatcher class
 
 The Dispatcher class implements the bits to hand out work to the
@@ -95,7 +123,7 @@ the dispatcher to start new work.
 
 Implements:
 
-	go_interface( $Notes )
+	do_interface( $Notes )
 	
 Creates in C<$Notes>
 

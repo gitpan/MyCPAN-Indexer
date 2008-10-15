@@ -1,21 +1,18 @@
 # where to find the distributions
 # this doesn't have to be an actual backpan.
-#backpan_dir /Volumes/Maxtor 120/BackPAN/authors/id/B/BD/BDFOY
-backpan_dir /MINICPAN/authors/id/B/BD/BDFOY
+backpan_dir /Volumes/Maxtor 120/BackPAN/authors/id/A/AN/ANDYA
 
 # where to store the distribution reports
-#report_dir  /Volumes/Maxtor 120/BackPAN indexer/test
-report_dir  /Users/brian/Desktop/Perl Projects/BackPAN Test/report
+report_dir  /Users/brian/Desktop/andya-catalog
 
 # where to unpack the dists or create any temporary files
-#temp_dir    /Volumes/Maxtor 120/BackPAN indexer/temp
-temp_dir    /Users/brian/Desktop/Perl Projects/BackPAN Test/tmp
+temp_dir    /Users/brian/Desktop/andya-catalog
 
 # the maximum amont of time allowed to index a distribution, in seconds
 alarm       15
 
 # If set to a true value, copy bad distributions to the named directory
-copy_bad_dists /dev/null
+copy_bad_dists /Users/brian/Desktop/andya-catalog/bad-dists
 
 # Try to index a distribution even if it was previously tried and
 # had an error
@@ -33,13 +30,14 @@ indexer_class MyCPAN::Indexer
 
 queue_class MyCPAN::Indexer::Queue
 
-# the Perl class to use to hand out indexing jobs. This needs to 
-# provide a 
+# the Perl class to use to hand out indexing jobs.
 dispatcher_class MyCPAN::Indexer::Dispatch::Parallel
 
-interface_class MyCPAN::Indexer::Interface::Tk
+interface_class MyCPAN::Indexer::Interface::Text
 
-work_class MyCPAN::Indexer::Worker
+worker_class MyCPAN::Indexer::Worker
+
+reporter_class  MyCPAN::Indexer::Reporter::AsYAML
 
 # The number of parallel jobs to run
-parallel_jobs 4
+parallel_jobs 1

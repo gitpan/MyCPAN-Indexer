@@ -2,7 +2,10 @@ package MyCPAN::Indexer::Interface::Tk;
 use strict;
 use warnings;
 
-use Log::Log4perl qw(:easy);
+use vars qw($VERSION $logger);
+$VERSION = '1.16_02';
+
+use Log::Log4perl;
 use Tk;
 
 =head1 NAME
@@ -29,6 +32,10 @@ This class presents the information as the indexer runs, using Tk.
 
 =cut
 
+BEGIN {
+	$logger = Log::Log4perl->get_logger( 'Interface' );
+	}
+
 sub do_interface 
 	{
 	my( $class, $Notes ) = @_;
@@ -43,7 +50,11 @@ sub do_interface
 	my $menubar = _menubar( $mw );
 	
 	my( $progress, $top, $middle, $bottom ) = map {
-		$mw->Frame->pack( -anchor => 'w', -expand => 1, -fill => 'x' );
+		$mw->Frame->pack( 
+			-anchor => 'w', 
+			-expand => 1, 
+			-fill   => 'x',
+			);
 		} 1 .. 4;
 	
 	# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -81,21 +92,23 @@ sub do_interface
 	foreach my $label ( qw( UUID Started Elapsed Rate ) )
 		{
 		$Notes->{$label} ||= ' ' x 60;
-		my $frame = $tracker_right->Frame->pack( -side => 'top' );
+		my $frame = $tracker_right->Frame->pack( 
+			-side   => 'top', 
+			-anchor => 'w',
+			-fill   => 'x',
+			);
 		$frame->Label( 
-			-text  => $label, 
-			-width => 6,
-			-background => 'yellow',
-			)->pack( 
+			-text       => $label, 
+			-width      => 6,
+			)->pack(
 				-side => 'left',
 				);
 		$frame->Entry( 
-			-textvariable => \ $Notes->{$label}, 
+			-textvariable       => \ $Notes->{$label}, 
 			-relief             => 'flat',
 			-width              => -1,
 			-state              => 'disabled',
 			-disabledforeground => '',
-			-disabledbackground => 'green',
 			)->pack( 
 				-side   => 'right', 
 				-expand => 1,
@@ -154,6 +167,7 @@ sub do_interface
 	$proc_frame->Listbox(
 		-height        => $Notes->{Threads},
 		-listvariable  => $Notes->{recent},
+		-relief        => 'flat',
 		)->pack( 
 			-side   => 'bottom', 
 			-expand => 1, 
@@ -165,8 +179,9 @@ sub do_interface
 	my $errors  = $bottom->Frame->pack( -anchor => 'w', -expand => 1, -fill => 'x' );
 	$errors->Label( -text => 'Errors', )->pack( -side => 'top', -anchor => 'w');
 	$errors->Listbox(
-		-height => 10,
-		-listvariable => $Notes->{errors},
+		-height        => 10,
+		-listvariable  => $Notes->{errors},
+		-relief        => 'flat',
 		)->pack(
 			-expand => 1,
 			-fill   => 'x',
@@ -203,12 +218,9 @@ sub _menubar
 	my $file_items = [
 		[qw( command ~Quit -accelerator Ctrl-q -command ) => sub { exit } ]
 		];
-
-	my( $edit_items, $help_items, $play_items, $refresh_items ) = ( [], [], [] );
-
 		
 	my $file = _menu( $menubar, "~File",     $file_items );
-	my $edit = _menu( $menubar, "~Edit",     $edit_items );
+	my $edit = _menu( $menubar, "~Edit",     [] );
 	
 	return $menubar;
 	}

@@ -2,19 +2,36 @@
 use strict;
 use warnings;
 no warnings 'uninitialized';
+use vars qw( %Options );
 
 use blib;
 use Cwd qw(cwd);
 use Data::Dumper;
 use File::Basename;
 use File::Spec::Functions qw(catfile);
-use Log::Log4perl qw(:easy);
+use Getopt::Std;
+use Log::Log4perl;
 
+$|++;
+
+my $logger = Log::Log4perl->get_logger( 'backpan_indexer' );
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Process the options
+{
+my $run_dir = dirname( $0 );
+( my $script  = basename( $0 ) ) =~ s/\.\w+$//;
+
+getopts('i:f:', \%Options); 
+
+$Options{f} ||= catfile( $run_dir, "$script.conf" );
+$Options{i} ||= catfile( $run_dir, "$script.log4perl" );
+}
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Minutely control the environment
 {
-my %pass_through = map { $_, 1 } qw( DISPLAY USER HOME PWD );
+my %pass_through = map { $_, 1 } qw( DISPLAY USER HOME PWD TERM );
 
 foreach my $key ( keys %ENV ) 
 	{ 
@@ -26,69 +43,44 @@ $ENV{AUTOMATED_TESTING}++;
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # The set up
-my $run_dir = dirname( $0 );
+Log::Log4perl->init_and_watch( $Options{i}, 30 );
 
-Log::Log4perl->init_and_watch( 
-	catfile( $run_dir, 'backpan_indexer.log4perl' ), 
-	30 
-	);
-
-my $Config = get_config( $run_dir );
+my $Config = get_config( $Options{f} );
 
 setup_dirs( $Config );
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # Load classes and check that they do the right thing
-
-my $queue_class = $Config->queue_class || "MyCPAN::Indexer::Queue";
-eval "require $queue_class" or die "$@\n";
-die "Interface class [$queue_class] does not implement get_queue()" 
-	unless $queue_class->can( 'get_queue' );
-
-my $dispatcher_class = $Config->dispatcher_class || "MyCPAN::Indexer::Dispatch::Parallel";
-eval "require $dispatcher_class" or die "$@\n";
-die "Dispatcher class [$dispatcher_class] does not implement get_dispatcher()" 
-	unless $dispatcher_class->can( 'get_dispatcher' );
-
-my $interface_class = $Config->interface_class || "MyCPAN::Indexer::Interface::Tk";
-eval "require $interface_class" or die "$@\n";
-die "Interface class [$interface_class] does not implement do_interface()" 
-	unless $interface_class->can( 'do_interface' );
-
-my $worker_class = $Config->worker_class || "MyCPAN::Indexer::Worker";
-DEBUG( "worker class is $worker_class" );
-eval "require $worker_class" or die "$@\n";
-die "Worker class [$worker_class] does not implement get_task()" 
-	unless $worker_class->can( 'get_task' );
-
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# Figure out what to index
-my $dists = $queue_class->get_queue( $Config );
-die "get_queue did not return an array reference\n"
-	unless ref $dists eq ref [];
-DEBUG( "Dists to process are\n\t", join "\n\t", @$dists );
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# The meat of the issue
-INFO( "Run started - " . @$dists . " dists to process" );
-
 my $Notes = { 
-	queue      => $dists,
 	config     => $Config,
 	UUID       => get_uuid(),
 	};
 
-$Notes->{child_task} = $worker_class->get_task( $Notes );
+{
+my @components = (
+	[ qw( queue_class      MyCPAN::Indexer::Queue             get_queue      ) ],
+	[ qw( dispatcher_class MyCPAN::Indexer::Parallel          get_dispatcher ) ],
+	[ qw( reporter_class   MyCPAN::Indexer::Reporter::AsYAML  get_reporter   ) ],
+	[ qw( worker_class     MyCPAN::Indexer::Worker            get_task       ) ],
+	[ qw( interface_class  MyCPAN::Indexer::Interface::Curses do_interface   ) ],
+	[ qw( reporter_class   MyCPAN::Indexer::Interface::Curses final_words    ) ],
+	);
 
-die "get_task is not a code ref" unless 
-	ref $Notes->{child_task} eq ref sub {};
+foreach my $tuple ( @components )
+	{
+	my( $directive, $default_class, $method ) = @$tuple;
 	
-$dispatcher_class->get_dispatcher( $Notes );
-die "Dispatcher class [$dispatcher_class] did not set a dispatcher key\n"
-	unless exists $Notes->{dispatcher};
+	my $class = $Config->get( $directive) || $default_class;
+	
+	eval "require $class" or die "$@\n";
+	die "$directive [$class] does not implement $method()" 
+		unless $class->can( $method );
+		
+	$logger->debug( "Calling $class->$method()" );
+	$class->$method( $Notes );
+	}
 
-$interface_class->do_interface( $Notes );
+}
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -97,17 +89,16 @@ sub get_config
 	{
 	require ConfigReader::Simple;
 
-	my $run_dir = shift;
+	my $file = shift;
 	
-	my $conf    = catfile( $run_dir, 'backpan_indexer.config' );
-	DEBUG( "Run dir is $run_dir; Conf file is $conf" );
+	$logger->debug( "Conf file is $file" );
 	
-	my $Config = ConfigReader::Simple->new( $conf,
+	my $Config = ConfigReader::Simple->new( $file,
 		[ qw(temp_dir backpan_dir report_dir alarm 
 			copy_bad_dists retry_errors indexer_class) ]
 		);
 		
-	FATAL( "Could not read config!" ) unless ref $Config;
+	$logger->fatal( "Could not read config!" ) unless ref $Config;
 	
 	$Config;
 	}
@@ -125,8 +116,8 @@ sub setup_dirs
 	my $yml_dir       = catfile( $Config->report_dir, "meta"        );
 	my $yml_error_dir = catfile( $Config->report_dir, "meta-errors" );
 	
-	DEBUG( "Value of retry is " . $Config->retry_errors );
-	DEBUG( "Value of copy_bad_dists is " . $Config->copy_bad_dists );
+	$logger->debug( "Value of retry is " . $Config->retry_errors );
+	$logger->debug( "Value of copy_bad_dists is " . $Config->copy_bad_dists );
 	
 	if( $Config->retry_errors )
 		{

@@ -30,25 +30,24 @@ WriteMakefile(
 		'Tk::ProgressBar'                  => '0',
 		'YAML::Syck'                       => '0',
 		'YAML'                             => '0',
+		'Curses'                           => '0',
 		},
 
 	'PM'           => {
-		'lib/Indexer.pm'  => '$(INST_LIBDIR)/Indexer.pm',
-		'lib/Parallel.pm' => '$(INST_LIBDIR)/Indexer/Dispatch/Parallel.pm',
-		'lib/Tk.pm'       => '$(INST_LIBDIR)/Indexer/Interface/Tk.pm',
-		'lib/Queue.pm'    => '$(INST_LIBDIR)/Indexer/Queue.pm',
-		'lib/Worker.pm'   => '$(INST_LIBDIR)/Indexer/Worker.pm',
-		'lib/Tutorial.pm' => '$(INST_LIBDIR)/Indexer/Tutorial.pm',
+		'lib/AsYAML.pm'     => '$(INST_LIBDIR)/Indexer/Reporter/AsYAML.pm',
+		'lib/Text.pm'       => '$(INST_LIBDIR)/Indexer/Interface/Text.pm',
+		'lib/Curses.pm'     => '$(INST_LIBDIR)/Indexer/Interface/Curses.pm',
+		'lib/Indexer.pm'    => '$(INST_LIBDIR)/Indexer.pm',
+		'lib/NullTester.pm' => '$(INST_LIBDIR)/Indexer/NullTester.pm',
+		'lib/Parallel.pm'   => '$(INST_LIBDIR)/Indexer/Dispatch/Parallel.pm',
+		'lib/Queue.pm'      => '$(INST_LIBDIR)/Indexer/Queue.pm',
+		'lib/TestCensus.pm' => '$(INST_LIBDIR)/Indexer/TestCensus.pm',
+		'lib/Tk.pm'         => '$(INST_LIBDIR)/Indexer/Interface/Tk.pm',
+		'lib/Tutorial.pm'   => '$(INST_LIBDIR)/Indexer/Tutorial.pm',
+		'lib/Worker.pm'     => '$(INST_LIBDIR)/Indexer/Worker.pm',
 		},
 
-	'MAN3PODS'     => {
-		'lib/Indexer.pm'  => '$(INST_MAN3DIR)/MyCPAN::Indexer.3',
-		'lib/Parallel.pm' => '$(INST_MAN3DIR)/MyCPAN::Indexer::Dispatch::Parallel.3',
-		'lib/Tk.pm'       => '$(INST_MAN3DIR)/MyCPAN::Indexer::Interface::Tk.3',
-		'lib/Queue.pm'    => '$(INST_MAN3DIR)/MyCPAN::Indexer::Queue.3',
-		'lib/Worker.pm'   => '$(INST_MAN3DIR)/MyCPAN::Indexer::Worker.3',
-		'lib/Tutorial.pm' => '$(INST_MAN3DIR)/MyCPAN::Indexer::Tutorial.3',
-		},
+	'MAN3PODS'     => {},
 
 	clean  => { FILES    => q|MyCPAN-Indexer-*| },
 
