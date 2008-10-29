@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.16_02';
+$VERSION = '1.17_02';
 
 use Log::Log4perl;
 use Tk;
