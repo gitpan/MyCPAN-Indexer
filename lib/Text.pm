@@ -3,10 +3,9 @@ use strict;
 use warnings;
 
 use Log::Log4perl;
-use Curses;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.17_02';
+$VERSION = '1.17_04';
 
 =head1 NAME
 
@@ -38,32 +37,32 @@ BEGIN {
 	$logger = Log::Log4perl->get_logger( 'Interface' );
 	}
 
-sub do_interface 
+sub do_interface
 	{
 	my( $class, $Notes ) = @_;
 	$logger->debug( "Calling do_interface" );
-	
-	print "BackPAN Indexer 1.00\n";	
+
+	print "BackPAN Indexer 1.00\n";
 
 	print 'Processing ' . @{ $Notes->{queue} } . " distributions\n";
 	print "One * = 1 distribution\n";
-	
+
 	my $count = 0;
 	while( 1 )
 		{
 		last if $Notes->{Left} <= 0;
-	
+
 		local $|;
 		$|++;
-		
+
 		print "*";
 		print "\n" unless ++$count % 70;
-		
+
 		$Notes->{interface_callback}->();
 		}
 
 	print "\n";
-	
+
 	}
 
 

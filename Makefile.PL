@@ -1,4 +1,3 @@
-# $Id: Makefile.PL,v 1.4 2004/07/04 17:04:17 comdog Exp $
 use ExtUtils::MakeMaker;
 
 require 5.006;
@@ -15,6 +14,7 @@ WriteMakefile(
 	'PREREQ_PM'    => { 
 		'Archive::Extract'                 => '0',
 		'Archive::Tar'                     => '0',
+		'ConfigReader::Simple'             => '0',
 		'Data::UUID'                       => '0',
 		'Distribution::Guess::BuildSystem' => '0.11',
 		'File::Find'                       => '0',
@@ -28,12 +28,10 @@ WriteMakefile(
 		'Probe::Perl'                      => '0',
 		'Test::More'                       => '0',
 		'Test::Output'                     => '0',
-		'Tk'                               => '0',
-		'Tk::ProgressBar'                  => '0',
 		'YAML::Syck'                       => '0',
 		'YAML'                             => '0',
-		'Curses'                           => '0',
 		'CPAN::PackageDetails'             => '0',
+		'CPAN::Checksums'                  => '0',
 		},
 
 	'PM'           => {

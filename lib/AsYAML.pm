@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.17_02';
+$VERSION = '1.17_04';
 
 use Carp;
 use File::Basename;
@@ -51,6 +51,7 @@ sub get_reporter
 
 	my( $class, $Notes ) = @_;
 
+	# XXX: These subdirs need not not be literals
 	my $yml_dir       = catfile( $Notes->{config}->report_dir, "meta"        );
 	my $yml_error_dir = catfile( $Notes->{config}->report_dir, "meta-errors" );
 
@@ -62,7 +63,7 @@ sub get_reporter
 			$logger->error( "info is undefined!" );
 			return;
 			}
-		
+
 		my $dist = $info->dist_info( 'dist_file' );
 		$logger->error( "Info doesn't have dist_name! WTF?" ) unless $dist;
 
@@ -73,10 +74,10 @@ sub get_reporter
 
 		my $out_path = catfile( $out_dir, "$basename.yml" );
 
-		open my($fh), ">", $out_path or FATAL( "Could not open $out_path: $!" );
+		open my($fh), ">", $out_path or $logger->fatal( "Could not open $out_path: $!" );
 		print $fh Dump( $info );
 
-		$logger->ERROR( "$basename.yml is missing!" ) unless -e $out_path;
+		$logger->error( "$basename.yml is missing!" ) unless -e $out_path;
 
 		1;
 		};
