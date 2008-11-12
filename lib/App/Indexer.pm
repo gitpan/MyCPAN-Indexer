@@ -6,6 +6,7 @@ no warnings 'uninitialized';
 
 use vars qw($VERSION);
 
+use Carp;
 use Cwd qw(cwd);
 use File::Basename;
 use File::Path qw(mkpath);
@@ -14,7 +15,7 @@ use File::Temp qw(tempdir);
 use Getopt::Std;
 use Log::Log4perl;
 
-$VERSION = '1.17_04';
+$VERSION = '1.17_08';
 
 $|++;
 
@@ -22,24 +23,30 @@ my $logger = Log::Log4perl->get_logger( 'backpan_indexer' );
 
 __PACKAGE__->run( @ARGV ) unless caller;
 
+$SIG{__WARN__} = sub { Carp::cluck( @_ ) };
+
 BEGIN {
 my $cwd = cwd();
 
+my $report_dir = catfile( $cwd, 'indexer_reports' );
+
 my %Defaults = (
-	report_dir       => catfile( $cwd, 'indexer_reports' ),
-#	temp_dir         => catfile( $cwd, 'temp' ),
-	alarm            => 15,
-	copy_bad_dists   => 0,
-	retry_errors     => 1,
-	indexer_id       => 'Joe Example <joe@example.com>',
-	system_id        => 'an unnamed system',
-	indexer_class    => 'MyCPAN::Indexer',
-	queue_class      => 'MyCPAN::Indexer::Queue',
-	dispatcher_class => 'MyCPAN::Indexer::Dispatch::Parallel',
-	interface_class  => 'MyCPAN::Indexer::Interface::Text',
-	worker_class     => 'MyCPAN::Indexer::Worker',
-	reporter_class   => 'MyCPAN::Indexer::Reporter::AsYAML',
-	parallel_jobs    => 1,
+	report_dir            => $report_dir,
+	success_report_subdir => catfile( $report_dir, 'success' ),
+	error_report_subdir   => catfile( $report_dir, 'errors'  ),
+	alarm                 => 15,
+	log_file_watch_time   => 30,
+	copy_bad_dists        => 0,
+	retry_errors          => 1,
+	indexer_id            => 'Joe Example <joe@example.com>',
+	system_id             => 'an unnamed system',
+	indexer_class         => 'MyCPAN::Indexer',
+	queue_class           => 'MyCPAN::Indexer::Queue',
+	dispatcher_class      => 'MyCPAN::Indexer::Dispatch::Parallel',
+	interface_class       => 'MyCPAN::Indexer::Interface::Text',
+	worker_class          => 'MyCPAN::Indexer::Worker',
+	reporter_class        => 'MyCPAN::Indexer::Reporter::AsYAML',
+	parallel_jobs         => 1,
 	);
 
 sub default { $Defaults{$_[1]} }
@@ -52,11 +59,7 @@ sub get_config
 
 	eval "require " . $self->config_class . "; 1";
 
-	$logger->debug( "Config file is $file" );
-	$logger->debug( "Config file does not exist!" ) unless -e $file;
-
 	my $Config = $self->config_class->new( defined $file ? $file : () );
-	$logger->fatal( "Could not create config object!" ) unless ref $Config;
 
 	foreach my $key ( keys %Defaults )
 		{
@@ -68,6 +71,34 @@ sub get_config
 	}
 }
 
+sub adjust_config
+	{
+	my( $self, $Config, @argv ) = @_;
+	
+	# set the directories to index
+	unless( $Config->exists( 'backpan_dir') )
+		{
+		$Config->set( 'backpan_dir', [ @argv ? @argv : cwd() ] );
+		}
+	
+	unless( ref $Config->get( 'backpan_dir' ) eq ref [] )
+		{
+		$Config->set( 'backpan_dir', [ $Config->get( 'backpan_dir' ) ] );
+		}
+		
+	if( $Config->exists( 'report_dir' ) )
+		{
+		foreach my $subdir ( qw(success error) )
+			{
+			$Config->set(
+				"${subdir}_report_subdir",
+				catfile( $Config->get( 'report_dir' ), $subdir ),
+				);
+			}
+		}		
+			
+	}
+	
 sub run
 	{
 	my( $self, @argv ) = @_;
@@ -80,7 +111,7 @@ sub run
 	( my $script  = basename( $0 ) ) =~ s/\.\w+$//;
 
 	local @ARGV = @argv;
-	getopts('l:f:', \%Options);
+	getopts( 'cl:f:', \%Options );
 	@argv = @ARGV; # XXX: yuck
 
 	$Options{f} ||= catfile( $run_dir, "$script.conf" );
@@ -89,45 +120,34 @@ sub run
 
 	# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 	# Minutely control the environment
-	{
-	my %pass_through = map { $_, 1 } qw( DISPLAY USER HOME PWD TERM );
-
-	foreach my $key ( keys %ENV )
-		{
-		delete $ENV{$key} unless exists $pass_through{$key}
-		}
-
-	$ENV{AUTOMATED_TESTING}++;
-	}
-
+	$self->setup_environment;
+	
 	# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-	# The set up
-	if( -e $Options{l} )
-		{
-		Log::Log4perl->init_and_watch( $Options{l}, 30 );
-		}
-	else
-		{
-		Log::Log4perl->easy_init( $Log::Log4perl::ERROR );
-		}
-
+	# Adjust config based on run parameters
 	my $Config = $self->get_config( $Options{f} );
 
-	# set the directories to index
-	unless( $Config->exists( 'backpan_dir') )
+	$self->adjust_config( $Config, @argv );
+	
+	if( $Options{c} )
 		{
-		$Config->set( 'backpan_dir', [ @argv ? @argv : cwd() ] );
-		$logger->debug( 'Going to index [' . $Config->backpan_dir . ']' );
+		use Data::Dumper;
+		print STDERR Dumper( $Config );
+		exit;
 		}
-
-	$self->setup_dirs( $Config );
-
+	
 	# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 	# Load classes and check that they do the right thing
 	my $Notes = {
 		config     => $Config,
 		UUID       => $self->get_uuid(),
+		tempdirs   => [],
+		log_file   => $Options{l},
 		};
+
+	$self->setup_logging( $Notes );
+
+	$self->setup_dirs( $Notes );
+
 
 	{
 	my @components = $self->components;
@@ -147,8 +167,39 @@ sub run
 		}
 
 	}
+	
+	$self->cleanup_and_exit( $Notes );
 	}
 
+sub setup_environment
+	{
+	my %pass_through = map { $_, 1 } qw( DISPLAY USER HOME PWD TERM );
+
+	foreach my $key ( keys %ENV )
+		{
+		delete $ENV{$key} unless exists $pass_through{$key}
+		}
+
+	$ENV{AUTOMATED_TESTING}++;
+	}
+	
+sub setup_logging
+	{
+	my( $self, $Notes ) = @_;
+	
+	if( -e $Notes->{log_file} )
+		{
+		Log::Log4perl->init_and_watch( 
+			$Notes->{log_file}, 
+			$Notes->{config}->get( 'log_file_watch_time' )
+			);
+		}
+	else
+		{
+		Log::Log4perl->easy_init( $Log::Log4perl::ERROR );
+		}
+	}
+	
 sub components
 	{
 	(
@@ -161,51 +212,61 @@ sub components
 	)
 	}
 
-sub setup_dirs
+sub cleanup_and_exit
 	{
-	# XXX big ugly mess to clean up
-	my( $self, $Config ) = @_;
+	my( $self, $Notes ) = @_;
+	
+	require File::Path;
+	
+	my @dirs = @{ $Notes->{tempdirs} }, $Notes->{config}->get('temp_dir');
+	$logger->debug( "Dirs to remove are @dirs" );
+	
+	eval {
+		no warnings;
+		File::Path::rmtree [@dirs];
+		};
+	
+	print STDERR "$@\n" if $@;
+	
+	$logger->error( "Couldn't cleanup before exiting: $@" ) if $@;
+	
+	exit 0;
+	}
+	
+sub setup_dirs # XXX big ugly mess to clean up
+	{
+	my( $self, $Notes ) = @_;
 
-	my $starting_dir = cwd();
+	my $Config = $Notes->{config};
+	
+# Okay, I've gone back and forth on this a couple of times. There is 
+# no default for temp_dir. I create it here so it's only set when I
+# need it. It either comes from the user or on-demand creation. I then
+# set it's value in the configuration.
 
-	my $temp_dir = $Config->temp_dir || 
-		tempdir( CLEANUP => 1, DIR => $starting_dir );
-	$Config->set( 'temp_dir', $temp_dir );
+	my $temp_dir = $Config->temp_dir || tempdir( DIR => cwd(), CLEANUP => 0 );
 	$logger->debug( "temp_dir is [$temp_dir] [" . $Config->temp_dir . "]" );
+	$Config->set( 'temp_dir', $temp_dir );
+	push @{ $Notes->{tempdirs} }, $temp_dir;
 
 	mkpath( $temp_dir ) unless -d $temp_dir;
-	$logger->fatal( "temp_dir [$temp_dir] does not exist!" ) unless -d $temp_dir;
+	$logger->logdie( "temp_dir [$temp_dir] does not exist!" ) unless -d $temp_dir;
 
-	chdir $temp_dir or
-		$logger->fatal( "Could not change to [" . $Config->temp_dir . "]: $!" );
-
-	my $report_dir    = $Config->report_dir || 
-		tempdir( CLEANUP => 1, DIR => $starting_dir );
-	$Config->set( 'report_dir', $report_dir );
-	my $yml_dir       = catfile( $report_dir, "meta"        );
-	my $yml_error_dir = catfile( $report_dir, "meta-errors" );
-
-	foreach my $dir ( $yml_dir, $yml_error_dir )
+	foreach my $key ( qw(report_dir success_report_subdir error_report_subdir) )
 		{
+		my $dir = $Config->get( $key );
+		
 		mkpath( $dir ) unless -d $dir;
-		$logger->fatal( "report_dir [$report_dir] does not exist!" ) unless -d $dir;
+		$logger->logdie( "$key [$dir] does not exist!" ) unless -d $dir;
 		}
-
-	$logger->debug( "Value of retry is " . $Config->retry_errors );
-	$logger->debug( "Value of copy_bad_dists is " . $Config->copy_bad_dists );
 
 	if( $Config->retry_errors )
 		{
-		my $glob = catfile( $yml_error_dir, "*.yml" );
-		$glob =~ s/ /\\ /g;
+		my $glob = catfile( $Config->get( 'error_report_subdir' ), "*.yml" );
+		$glob =~ s/( +)/(\\$1)/g;
 
 		unlink glob( $glob );
 		}
-
-	mkdir $yml_dir,       0755 unless -d $yml_dir;
-	mkdir $yml_error_dir, 0755 unless -d $yml_error_dir;
-	
-	chdir $starting_dir;
 	}
 
 sub get_uuid

@@ -15,7 +15,7 @@ use File::Spec::Functions qw(catfile);
 use File::Path;
 use YAML;
 
-$VERSION = '1.17_04';
+$VERSION = '1.17_08';
 
 =head1 NAME
 
@@ -29,10 +29,12 @@ MyCPAN::Indexer::DPAN - Create a D(ark)PAN out of the indexed distributions
 
 This module implements the indexer_class and reporter_class components
 to allow C<backpan_indexer.pl> to count the test modules used in the
-indexed distributions.
+indexed distributions. This application of MyCPAN::Indexer is 
+specifically aimed at creating a 02packages.details file, so it 
+strives to collect a minimum of information.
 
 It runs through the indexing and prints a report at the end of the run.
-You probably
+
 
 =cut
 
@@ -84,13 +86,26 @@ C<MyCPAN::Indexer::find_modules>.
 sub find_module_techniques
 	{
 	my @methods = (
-		[ 'look_in_lib',    "Guessed from looking in lib/" ],
-		[ 'look_in_cwd',    "Guessed from looking in cwd"  ],
-		[ 'look_in_meta_yml_provides',    "Guessed from looking in META.yml"  ],
-		[ 'look_for_pm',    "Guessed from looking in cwd"  ],
+		[ 'look_in_lib',               "Guessed from looking in lib/"      ],
+		[ 'look_in_cwd',               "Guessed from looking in cwd"       ],
+		[ 'look_in_meta_yml_provides', "Guessed from looking in META.yml"  ],
+		[ 'look_for_pm',               "Guessed from looking in cwd"       ],
 		);
 	}
 
+=item get_module_info_tasks
+
+
+=cut
+
+sub get_module_info_tasks
+	{
+	(
+	[ 'extract_module_namespaces',   'Extract the namespaces a file declares' ],
+	[ 'extract_module_version',       'Extract the version of the module'     ],
+	)
+	}
+	
 =item setup_run_info
 
 Like C<setup_run_info> in C<MyCPAN::Indexer>, but it remembers fewer
@@ -148,6 +163,10 @@ sub setup_dist_info
 
 =item get_reporter( $Notes )
 
+Inherited for MyCPAN::App::BackPAN::Indexer
+
+=item final_words( $Notes )
+
 C<get_reporter> sets the C<reporter> key in the C<$Notes> hash reference. The
 value is a code reference that takes the information collected about a distribution
 and counts the modules used in the test files.
@@ -162,32 +181,44 @@ sub final_words
 	# This is where I want to write 02packages and CHECKSUMS
 	my( $class, $Notes ) = @_;
 
-	$reporter_logger->debug( "Final words from the DPAN Reporter" );
+	$reporter_logger->trace( "Final words from the DPAN Reporter" );
 
-	my $report_dir = catfile( $Notes->{config}->report_dir, 'meta' );
-
+	my $report_dir = $Notes->{config}->success_report_subdir;
 	$reporter_logger->debug( "Report dir is $report_dir" );
+
 	opendir my($dh), $report_dir or
 		$reporter_logger->fatal( "Could not open directory [$report_dir]: $!");
+
 
 	my %dirs_needing_checksums;
 
 	require CPAN::PackageDetails;
-	my $package_details = CPAN::PackageDetails->new(
-
-		);
+	my $package_details = CPAN::PackageDetails->new;
 
 	require version;
 	foreach my $file ( readdir( $dh ) )
 		{
-		next if $file =~ /^.{1,2}\z/;
+		next unless $file =~ /\.yml\z/;
 		$reporter_logger->debug( "Processing output file $file" );
 		my $yaml = eval { YAML::LoadFile( catfile( $report_dir, $file ) ) } or do {
 			$reporter_logger->error( "$file: $@" );
 			next;
 			};
 
-		$dirs_needing_checksums{ dirname( $yaml->{dist_info}{dist_file} ) }++;
+		my $dist_file = $yaml->{dist_info}{dist_file};
+		
+		#print STDERR "Dist file is $dist_file\n";
+		
+		# some files may be left over from earlier runs, even though the
+		# original distribution has disappeared. Only index distributions
+		# that are still there
+		#my @backpan_dirs = @{ $Notes->{config}->backpan_dir };
+		# check that dist file is in one of these directories
+		next unless -e $dist_file; # && $dist_file =~ m/^\Q$backpan_dir/;
+		
+		my $dist_dir = dirname( $dist_file );
+		
+		$dirs_needing_checksums{ $dist_dir }++;
 
 		foreach my $module ( @{ $yaml->{dist_info}{module_info} }  )
 			{
@@ -197,10 +228,16 @@ sub final_words
 
 			foreach my $package ( @$packages )
 				{
+				# broken crap that works on Unix and Windows to make cpanp
+				# happy.
+				( my $path = $dist_file ) =~ s/.*authors.id.//g;
+				
+				$path =~ s|\\+|/|g; # no windows paths.
+				
 				$package_details->add_entry(
 					'package name' => $package,
 					version        => $version,
-					path           => $yaml->{dist_info}{dist_file},
+					path           => $path,
 					);
 				}
 			}
@@ -209,7 +246,7 @@ sub final_words
 	my $dir = do {
 		my $d = $Notes->{config}->backpan_dir;
 		ref $d ? $d->[0] : $d;
-	};
+		};
 
 	( my $packages_dir = $dir ) =~ s/authors.id.*//;
 	$reporter_logger->debug( "package details directory is [$packages_dir]");
@@ -222,27 +259,69 @@ sub final_words
 
 	$package_details->write_file( $packages_file );
 
+	$class->create_modlist( $index_dir );
+
+	$class->create_checksums( [ keys %dirs_needing_checksums ] );
+
+	}
+
+=item create_package_details
+
+=cut
+
+sub create_package_details
+	{
+	my( $self, $index_dir ) = @_;
+	
+		
+	1;
+	}
+	
+=item create_modlist
+
+=cut
+
+sub create_modlist
+	{
+	my( $self, $index_dir ) = @_;
+	
+	my $module_list_file = catfile( $index_dir, '03modlist.data.gz' );
+	$reporter_logger->debug( "modules list file is [$module_list_file]");
+
+	if( -e $module_list_file )
+		{
+		$reporter_logger->debug( "File [$module_list_file] already exists" );
+		return 1;
+		}
+		
+	my $fh = IO::Compress::Gzip->new( $module_list_file );
+	print $fh "This is just a placeholder so CPAN.pm is happy\n\t\t-- $0\n";
+	close $fh;
+	}
+	
+=item create_checksums
+
+
+=cut
+
+sub create_checksums
+	{
+	my( $self, $dirs ) = @_;
+	
 	require CPAN::Checksums;
-	foreach my $dir ( keys %dirs_needing_checksums )
+	foreach my $dir ( @$dirs )
 		{
         my $rc = eval{ CPAN::Checksums::updatedir( $dir ) };
 		$reporter_logger->error( "Couldn't create CHECKSUMS for $dir: $@") unless $rc;
 		$reporter_logger->info(
 			do {
-				if( $rc == 1 )    { "Valid CHECKSUMS file is already present in $dir: skipping" }
+				if(    $rc == 1 ) { "Valid CHECKSUMS file is already present in $dir: skipping" }
 				elsif( $rc == 2 ) { "Wrote new CHECKSUMS file in $dir" }
 				else              { "updatedir unexpectedly returned true [$rc] for $dir" }
- 			} );
-		}
-
-	my $module_list_file = catfile( $index_dir, '03modlist.data.gz' );
-	$reporter_logger->debug( "modules list file is [$module_list_file]");
-
-	my $fh = IO::Compress::Gzip->new( $module_list_file );
-	print $fh "This is just a placeholder so CPAN.pm is happy\n\t\t-- $0\n";
-	close $fh;
+			} );
+		}	
 	}
-
+	
 =back
 
 =head1 TO DO
