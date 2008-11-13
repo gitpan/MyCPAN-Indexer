@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION $logger);
 
-$VERSION = '1.17_08';
+$VERSION = '1.17_09';
 
 =head1 NAME
 
@@ -1031,7 +1031,13 @@ sub get_module_info
 		{
 		my( $method, $description ) = @$task;
 		$logger->debug( "get_module_info calling [$method]\n" );
-		$self->$method( $file, $hash );
+
+		my $result = $self->$method( $file, $hash );
+		
+		unless( $result )
+			{
+			$self->set_run_info( 'error', "Problem with $method and $file" );
+			}
 		}
 
 	$hash;
@@ -1059,7 +1065,12 @@ sub extract_module_version
 
 	require Module::Extract::VERSION;
 
-	$hash->{version} = Module::Extract::VERSION->parse_version_safely( $file );
+	$hash->{version} = eval {
+		local $SIG{__WARN__} = sub { die @_ };
+		Module::Extract::VERSION->parse_version_safely( $file )
+		};
+	
+	return 0 if $@;
 	
 	1;
 	}

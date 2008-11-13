@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.17_08';
+$VERSION = '1.17_09';
 
 use Carp;
 use File::Basename;
@@ -68,6 +68,9 @@ sub get_reporter
 
 		my $out_dir_key  = $info->run_info( 'completed' ) ? 'success' : 'error';
 
+		$out_dir_key = 'error' if grep { $info->run_info($_) } 
+			qw(error fatal_error);
+		
 		my $out_path = catfile( 
 			$Notes->{config}->get( "${out_dir_key}_report_subdir" ), 
 			"$basename.yml" 

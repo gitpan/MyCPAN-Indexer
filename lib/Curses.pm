@@ -10,7 +10,7 @@ BEGIN {
 }
 
 use vars qw($VERSION $logger);
-$VERSION = '1.17_08';
+$VERSION = '1.17_09';
 
 =head1 NAME
 
@@ -77,7 +77,7 @@ sub do_interface
 
 		_update_screen( $Notes );
 
-		last if $Notes->{Left} <= 0;
+		last if $Notes->{Finished};
 		}
 
 	}

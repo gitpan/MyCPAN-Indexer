@@ -15,7 +15,7 @@ use File::Temp qw(tempdir);
 use Getopt::Std;
 use Log::Log4perl;
 
-$VERSION = '1.17_08';
+$VERSION = '1.17_09';
 
 $|++;
 
@@ -23,7 +23,7 @@ my $logger = Log::Log4perl->get_logger( 'backpan_indexer' );
 
 __PACKAGE__->run( @ARGV ) unless caller;
 
-$SIG{__WARN__} = sub { Carp::cluck( @_ ) };
+#$SIG{__WARN__} = sub { Carp::cluck( @_ ) };
 
 BEGIN {
 my $cwd = cwd();

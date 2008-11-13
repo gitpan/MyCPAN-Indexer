@@ -5,7 +5,7 @@ use warnings;
 use Log::Log4perl;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.17_08';
+$VERSION = '1.17_09';
 
 =head1 NAME
 
@@ -50,7 +50,7 @@ sub do_interface
 	my $count = 0;
 	while( 1 )
 		{
-		last if $Notes->{Left} <= 0;
+		last if $Notes->{Finished};
 
 		local $|;
 		$|++;

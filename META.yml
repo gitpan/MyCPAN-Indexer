@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               MyCPAN-Indexer
-version:            1.17_08
+version:            1.17_09
 abstract:           Index a Perl distribution
 author:
     - brian d foy <bdfoy@cpan.org>
