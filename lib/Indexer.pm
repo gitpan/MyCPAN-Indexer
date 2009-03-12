@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION $logger);
 
-$VERSION = '1.17_09';
+$VERSION = '1.18';
 
 =head1 NAME
 
@@ -408,7 +408,7 @@ sub unpack_dist
 	my $rc = $extractor->extract( to => $self->dist_info( 'unpack_dir' ) );
 	$logger->debug( "Archive::Extract returns [$rc] for $dist" );
 
-	unless( $rc )
+	unless( $rc or $^O =~ /Win32/ )
 		{
 		$logger->error( "Archive::Extract could not extract $dist: " . $extractor->error(0) );
 		$self->set_dist_info( 'extraction_error', $extractor->error(0) );
@@ -1065,10 +1065,23 @@ sub extract_module_version
 
 	require Module::Extract::VERSION;
 
-	$hash->{version} = eval {
+	my @keys = qw( sigil identifier value filename line_number );
+	
+	my @version_info = eval {
 		local $SIG{__WARN__} = sub { die @_ };
-		Module::Extract::VERSION->parse_version_safely( $file )
+		my @v = Module::Extract::VERSION->parse_version_safely( $file );
 		};
+	
+	# I don't have a better way to know if nothing was found. I need
+	# to fix that in Module::Extract::VERSION
+	my $defined_count = grep defined, @version_info;
+	
+	my %v = ! $defined_count ? () : 
+		map  { $keys[$_] => $version_info[$_] } 0 .. $#keys;
+	
+	$v{error} = $@ if $@;
+	
+	$hash->{version_info} = \%v;
 	
 	return 0 if $@;
 	
