@@ -1,5 +1,9 @@
 # Changes for MyCPAN::Indexer
 
+1.19 - Thu Mar 12 20:02:01 2009
+	* Remove left over files that I've moved to MyCPAN::App::DPAN
+	as a separate distribution.
+
 1.18 - Thu Mar 12 06:20:52 2009
 	* Bump to a release version
 
