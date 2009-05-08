@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION $logger);
 
-$VERSION = '1.19';
+$VERSION = '1.18_01';
 
 =head1 NAME
 
@@ -405,7 +405,7 @@ sub unpack_dist
 
 	$self->set_dist_info( 'dist_archive_type', $extractor->type );
 
-	my $rc = $extractor->extract( to => $self->dist_info( 'unpack_dir' ) );
+	my $rc = $extractor->extract( to => scalar $self->dist_info( 'unpack_dir' ) );
 	$logger->debug( "Archive::Extract returns [$rc] for $dist" );
 
 	unless( $rc or $^O =~ /Win32/ )
