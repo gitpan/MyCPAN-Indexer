@@ -5,11 +5,11 @@ use warnings;
 use Log::Log4perl;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.18_03';
+$VERSION = '1.21';
 
 =head1 NAME
 
-MyCPAN::Indexer::Interface::Test - Present the run info as a text
+MyCPAN::Indexer::Interface::Text - Present the run info as a text
 
 =head1 SYNOPSIS
 
@@ -31,8 +31,6 @@ This class presents the information as the indexer runs, using plain text.
 
 =cut
 
-BEGIN { $SIG{INT} = sub { exit } }
-
 BEGIN {
 	$logger = Log::Log4perl->get_logger( 'Interface' );
 	}
@@ -42,7 +40,8 @@ sub do_interface
 	my( $class, $Notes ) = @_;
 	$logger->debug( "Calling do_interface" );
 
-	print "BackPAN Indexer 1.00\n";
+	print join( " ", $Notes->{config}->indexer_class, $Notes->{config}->indexer_class->VERSION ),
+		"\n";
 
 	print 'Processing ' . @{ $Notes->{queue} } . " distributions\n";
 	print "One * = 1 distribution\n";
@@ -62,7 +61,6 @@ sub do_interface
 		}
 
 	print "\n";
-
 	}
 
 
@@ -85,7 +83,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

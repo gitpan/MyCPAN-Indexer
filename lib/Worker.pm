@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.18_03';
+$VERSION = '1.21';
 
 use Cwd;
 use File::Basename;
@@ -66,7 +66,7 @@ sub get_task
 		eval "require $Indexer" or die;
 
 		my $starting_dir = cwd();
-		
+
 		unless( chdir $Config->temp_dir )
 			{
 			$logger->error( "Could not change to " . $Config->temp_dir . " : $!\n" );
@@ -79,7 +79,7 @@ sub get_task
 		alarm 0;
 
 		chdir $starting_dir;
-		
+
 		unless( defined $info )
 			{
 			$logger->error( "run failed for $basename: $@" );
@@ -151,14 +151,14 @@ sub _check_for_previous_result
 		{
 		my $dir  = $Notes->{config}->$key();
 		my $file = catfile( $dir , "$basename.yml" );
-	
+
 		if( -e $file )
 			{
 			$logger->debug( "Found run output for $basename in $dir. Skipping...\n" );
 			return;
 			}
 		}
-		
+
 	return $basename;
 	}
 
@@ -202,7 +202,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

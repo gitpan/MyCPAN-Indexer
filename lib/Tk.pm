@@ -16,7 +16,7 @@ BEGIN {
 }
 
 use vars qw($VERSION $logger);
-$VERSION = '1.18_03';
+$VERSION = '1.21';
 
 use Log::Log4perl;
 use Tk;
@@ -61,7 +61,7 @@ sub do_interface
 	$mw->geometry('500x375');
 
 	$mw->resizable( 0, 0 );
-	$mw->title( 'BackPAN Indexer 1.00' );
+	$mw->title( join " ", $Notes->{config}->indexer_class, $Notes->{config}->indexer_class->VERSION );
 	my $menubar = _menubar( $mw );
 
 	my( $progress, $top, $middle, $bottom ) = map {
@@ -275,7 +275,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

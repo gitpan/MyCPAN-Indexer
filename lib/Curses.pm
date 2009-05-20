@@ -10,7 +10,7 @@ BEGIN {
 }
 
 use vars qw($VERSION $logger);
-$VERSION = '1.18_03';
+$VERSION = '1.21';
 
 =head1 NAME
 
@@ -55,7 +55,7 @@ sub do_interface
 	$Notes->{curses}{rows} = LINES();
 	$Notes->{curses}{cols} = COLS();
 
-	addstr( 0, 0, 'BackPAN Indexer 1.00' );
+	addstr( 0, 0, join " ", $Notes->{Config}{indexer_class}, $Notes->{Config}{indexer_class}->VERSION );
 	refresh();
 
 	$Notes->{curses}{windows}{progress}      = newwin( 3, COLS(),   1,  0 );
@@ -247,7 +247,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

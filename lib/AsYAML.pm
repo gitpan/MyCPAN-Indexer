@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.18_03';
+$VERSION = '1.21';
 
 use Carp;
 use File::Basename;
@@ -68,12 +68,12 @@ sub get_reporter
 
 		my $out_dir_key  = $info->run_info( 'completed' ) ? 'success' : 'error';
 
-		$out_dir_key = 'error' if grep { $info->run_info($_) } 
+		$out_dir_key = 'error' if grep { $info->run_info($_) }
 			qw(error fatal_error);
-		
-		my $out_path = catfile( 
-			$Notes->{config}->get( "${out_dir_key}_report_subdir" ), 
-			"$basename.yml" 
+
+		my $out_path = catfile(
+			$Notes->{config}->get( "${out_dir_key}_report_subdir" ),
+			"$basename.yml"
 			);
 
 		open my($fh), ">", $out_path or $logger->fatal( "Could not open $out_path: $!" );
@@ -113,7 +113,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

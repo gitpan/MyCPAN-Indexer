@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION $logger);
-$VERSION = '1.18_03';
+$VERSION = '1.21';
 
 use Log::Log4perl;
 
@@ -12,7 +12,7 @@ BEGIN {
 	no warnings 'redefine';
 	use Parallel::ForkManager;
 
-	sub Parallel::ForkManager::finish { my ($s, $x)=@_;
+	sub Parallel::ForkManager::finish { my ($s, $x) = @_;
 	  if ( $s->{in_child} ) {
 		CORE::exit ($x || 0);
 	  }
@@ -41,7 +41,7 @@ Use this in backpan_indexer.pl by specifying it as the queue class:
 
 =head1 DESCRIPTION
 
-This class takes the list of ditributions to process and passes them
+This class takes the list of distributions to process and passes them
 out to the code that will do the work.
 
 =head2 Methods
@@ -106,7 +106,7 @@ sub _make_interface_callback
 		$class->_remove_old_processes( $Notes );
 
 		$logger->debug( "Start: Finished: $Notes->{Finished} Left: $Notes->{Left}" );
-		
+
 		unless( $Notes->{Left} )
 			{
 			$logger->debug( "Waiting on all children [" . time . "]" );
@@ -131,7 +131,7 @@ sub _make_interface_callback
 			$Notes->{Done}++;
 			$Notes->{Left} = $Notes->{Total} - $Notes->{Done};
 			$logger->debug( "Total: $Notes->{Total} Done: $Notes->{Done} Left: $Notes->{Left} Finished: $Notes->{Finished}" );
-			
+
 			no warnings;
 			$Notes->{Rate} = sprintf "%.2f / sec ",
 				eval { $Notes->{Done} / $Notes->{_elapsed} };
@@ -141,7 +141,7 @@ sub _make_interface_callback
 			{ # child
 			$Notes->{child_task}( $item );
 			$Notes->{dispatcher}->finish;
-			$logger->error( "The child is still running!" )
+			$logger->error( "The child is still running!" );
 			}
 
 		1;
@@ -205,7 +205,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 
