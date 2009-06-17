@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION $logger);
 
-$VERSION = '1.21';
+$VERSION = '1.24';
 
 =head1 NAME
 
@@ -102,7 +102,7 @@ Most of this needs to move out of run and into this method.
 Return a list of 3-element anonymous arrays that tell C<examine_dists>
 what to do. The elements of each anonymous array are:
 
-	1) the method to call (must be in indexing class or its parents)
+	1) the method to call (must be in indexing class or its parent classes)
 	2) a text description of the method
 	3) if a failure in that step should stop the exam: true or false
 
@@ -797,7 +797,7 @@ sub find_module_techniques
 
 =item find_modules
 
-Find the module files. First, look in C<blib/>. IF there are no files in
+Find the module files. First, look in C<blib/>. If there are no files in
 C<blib/>, look in C<lib/>. IF there are still none, look in the current
 working directory.
 
@@ -1272,9 +1272,9 @@ sub get_caller_info
 
 sub get_md5
 	{
-	require MD5;
+	require Digest::MD5;
 
-	my $context = MD5->new;
+	my $context = Digest::MD5->new;
 	$context->add( $_[1] );
 	$context->hexdigest;
 	}
