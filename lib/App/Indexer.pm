@@ -15,7 +15,7 @@ use File::Temp qw(tempdir);
 use Getopt::Std;
 use Log::Log4perl;
 
-$VERSION = '1.24';
+$VERSION = '1.25';
 
 $|++;
 
@@ -264,7 +264,7 @@ sub setup_logging
 		{
 		Log::Log4perl->init_and_watch(
 			$log_file,
-			$self->get_config->get( 'log_file_watch_time' )
+			$self->get_coordinator->get_config->get( 'log_file_watch_time' )
 			);
 		}
 	else

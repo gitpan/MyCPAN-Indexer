@@ -4,7 +4,7 @@ use warnings;
 
 use base qw(MyCPAN::Indexer::Reporter::Base);
 use vars qw($VERSION $logger);
-$VERSION = '1.24';
+$VERSION = '1.25';
 
 use Carp;
 use File::Basename;
@@ -18,7 +18,7 @@ BEGIN {
 
 =head1 NAME
 
-MyCPAN::Indexer::Storage::AsYAML - Save the result as a YAML file
+MyCPAN::Indexer::Reporter::AsYAML - Save the result as a YAML file
 
 =head1 SYNOPSIS
 
