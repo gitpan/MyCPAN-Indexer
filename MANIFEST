@@ -34,6 +34,7 @@ README
 t/app/backpan.t
 t/app/defaults.t
 t/compile.t
+t/guess_package_names.t
 t/load.t
 t/pod.t
 t/pod_coverage.t

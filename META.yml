@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               MyCPAN-Indexer
-version:            1.25
+version:            1.26
 abstract:           Index a Perl distribution
 author:
     - brian d foy <bdfoy@cpan.org>
@@ -30,6 +30,9 @@ requires:
     Test::More:           0
     Test::Output:         0.13
     YAML:                 0
+resources:
+    homepage:    http://github.com/briandfoy/mycpan-indexer/tree/master
+    repository:  git://github.com/briandfoy/mycpan-indexer.git
 no_index:
     directory:
         - t

@@ -4,7 +4,7 @@ use warnings;
 
 use base qw(MyCPAN::Indexer::Interface::Text)
 use vars qw($VERSION $logger);
-$VERSION = '1.25';
+$VERSION = '1.26';
 
 use Log::Log4perl;
 use Term::ANSIColor qw(colored);
@@ -24,9 +24,6 @@ Use this in C<backpan_indexer.pl> by specifying it as the interface class:
 
 This class presents the information as the indexer runs, using plain text.
 Successful reports are green and failed reports are red.
-
-
-=back
 
 =cut
 
