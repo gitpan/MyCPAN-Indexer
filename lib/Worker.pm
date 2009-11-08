@@ -4,7 +4,7 @@ use warnings;
 
 use base qw(MyCPAN::Indexer::Component);
 use vars qw($VERSION $logger);
-$VERSION = '1.26';
+$VERSION = '1.27';
 
 use Cwd;
 use File::Basename;

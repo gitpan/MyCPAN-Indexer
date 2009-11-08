@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION $logger);
 
-$VERSION = '1.26';
+$VERSION = '1.27';
 
 =head1 NAME
 
@@ -377,32 +377,40 @@ sub unpack_dist
 
 	require Archive::Tar;
 	require Archive::Extract;
-	local $Archive::Extract::WARN = 0;
-	local $Archive::Tar::WARN = $Archive::Extract::WARN; # sent in patch for this rt.cpan.org #40472
 
+	local $Archive::Extract::DEBUG = $logger->is_debug;
+	local $Archive::Extract::WARN  = $logger->is_warn;
+	local $Archive::Tar::WARN      = $Archive::Extract::WARN; # sent in patch for this rt.cpan.org #40472
+	local $Archive::Extract::PREFER_BIN = defined $ENV{PREFER_BIN} ? $ENV{PREFER_BIN} : 0;
+	
+	foreach my $var ( qw( DEBUG WARN PREFER_BIN ) )
+		{
+		no strict 'refs';
+		
+		$logger->debug( qq|\$Archive::Extract::$var is |, ${"Archive::Extract::$var"} );	
+		}
+		
 	my $self = shift;
 	my $dist = $self->dist_info( 'dist_file' );
 	$logger->debug( "Unpacking dist $dist" );
 
 	return unless $self->get_unpack_dir;
 
-	my $extractor = eval {
-		Archive::Extract->new( archive => $dist );
-		};
-	local $Archive::Tar::WARN = 0;
-
+	my $extractor = eval { Archive::Extract->new( archive => $dist ) };
+	my $error = $@;
+	
 	if( $extractor->type eq 'gz' )
 		{
 		$logger->error( "Dist $dist claims to be a gz, so try .tgz instead" );
 
-		$extractor = eval {
-			Archive::Extract->new( archive => $dist, type => 'tgz' )
-			};
+		eval {
+			$extractor = Archive::Extract->new( archive => $dist, type => 'tgz' );
+			} || ($error = $@);
 		}
 
-	unless( $extractor )
+	unless( ref $extractor )
 		{
-		$logger->error( "Could create Archive::Extract object for $dist [$@]" );
+		$logger->error( "Could create Archive::Extract object for $dist [$error]" );
 		$self->set_dist_info( 'dist_archive_type', 'unknown' );
 		return;
 		}
@@ -1061,7 +1069,7 @@ sub extract_module_namespaces
 
 	$hash->{module_name_from_file_guess} = $self->get_package_name_from_filename( $file );
 
-	$hash->{primary_package} = $self->guess_primary_package;
+	$hash->{primary_package} = $self->guess_primary_package( $hash->{packages}, $file );
 
 	1;
 	}
@@ -1086,13 +1094,13 @@ sub guess_primary_package
 	{
 	my( $self, $packages, $file ) = @_;
 
+	# ignore packages that start with an underscore
+	@$packages = grep { ! /\b_/ } @$packages;
+	
 	my $module = $self->get_package_name_from_filename( $file );
 	
 	my @matches = grep { $_ eq $module } @$packages;
 
-	# ignore packages that start with an underscore
-	@$packages = grep { ! /^_/ } @$packages;
-	
 	my $primary_package = $matches[0] || $packages->[0];
 
 	return $primary_package;	
