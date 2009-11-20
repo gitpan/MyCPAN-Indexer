@@ -15,7 +15,7 @@ use File::Temp qw(tempdir);
 use Getopt::Std;
 use Log::Log4perl;
 
-$VERSION = '1.27';
+$VERSION = '1.28';
 
 $|++;
 
@@ -260,8 +260,7 @@ sub setup_environment
 	{
 	my %pass_through = map { $_, 1 } qw( 
 		DISPLAY USER HOME PWD TERM 
-		DPAN_LOG4PERL_FILE MYCPAN_LOG4PERL_FILE
-		);
+		), grep { /^(?:D|MY)CPAN_/ } keys %ENV;
 
 	foreach my $key ( keys %ENV )
 		{
