@@ -4,12 +4,12 @@ use warnings;
 
 use base qw(MyCPAN::Indexer::Component);
 use vars qw($VERSION $logger);
-$VERSION = '1.28';
+$VERSION = '1.28_01';
 
 use File::Basename;
 use File::Find;
-use File::Find::Closures qw( find_by_regex );
-use File::Path qw(mkpath);
+use File::Find::Closures  qw( find_by_regex );
+use File::Path            qw(mkpath);
 use File::Spec::Functions qw( catfile rel2abs );
 use Log::Log4perl;
 
@@ -78,12 +78,17 @@ sub get_queue
 	if( $self->get_config->organize_dists )
 		{
 		$self->_setup_organize_dists( $dirs[0] );
-
+		
+		# I really hate this following line. It's sure to
+		# break on something
+		my $regex = catfile( qw( authors id (.) .. .+? ), '' );
+		
 		foreach my $i ( 0 .. $#$queue )
 			{
 			my $file = $queue->[$i];
 			$logger->debug( "Processing $file" );
-			next if $file =~ m|authors/id/./../.+?/|;
+			
+			next if $file =~ m|$regex|;
 			$logger->debug( "Copying $file into PAUSE structure" );
 
 			$queue->[$i] = $self->_copy_file( $file, $dirs[0] );
@@ -100,7 +105,8 @@ sub _get_file_list
 	my( $self, @dirs ) = @_;
 	
 	$logger->debug( "Taking dists from [@dirs]" );
-	my( $wanted, $reporter ) = File::Find::Closures::find_by_regex( qr/\.(t?gz|zip)$/ );
+	my( $wanted, $reporter ) = 
+		File::Find::Closures::find_by_regex( qr/\.(t?gz|zip)$/ );
 
 	find( $wanted, @dirs );
 	

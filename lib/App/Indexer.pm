@@ -15,7 +15,7 @@ use File::Temp qw(tempdir);
 use Getopt::Std;
 use Log::Log4perl;
 
-$VERSION = '1.28';
+$VERSION = '1.28_01';
 
 $|++;
 
@@ -317,7 +317,6 @@ sub cleanup
 		no warnings;
 		File::Path::rmtree [@dirs];
 		};
-	print STDERR "$@\n" if $@;
 
 	$logger->error( "Couldn't cleanup: $@" ) if $@;
 	}
