@@ -4,7 +4,7 @@ use warnings;
 
 use base qw(MyCPAN::Indexer::Component);
 use vars qw($VERSION $logger);
-$VERSION = '1.28_02';
+$VERSION = '1.28_07';
 
 use File::Basename;
 use File::Find;
@@ -41,7 +41,7 @@ indexer to process.
 
 C<get_queue> sets the key C<queue> in C<$Notes> hash reference. It
 finds all of the tarballs or zip archives in under the directories
-named in C<backpan_dir> in the configuration.
+named in C<backpan_dir> and C<merge_dirs> in the configuration.
 
 It specifically skips files that end in C<.txt.gz> or C<.data.gz>
 since PAUSE creates those meta files near the actual module
@@ -59,14 +59,16 @@ sub get_queue
 	{
 	my( $self ) = @_;
 	
-	my @dirs = do {
-		my $item = $self->get_config->backpan_dir || '';
-		split /\s+/, $item;
-		};
+	my @dirs = 
+		( 
+		$self->get_config->backpan_dir, 
+		split /\x00/, $self->get_config->merge_dirs || ''
+		)
+		;
 
 	foreach my $dir ( @dirs )
 		{
-		$logger->error( "backpan_dir directory does not exist: [$dir]" )
+		$logger->error( "Distribution source directory does not exist: [$dir]" )
 			unless -e $dir;
 		}
 	
@@ -147,6 +149,8 @@ sub _path_parts
 # if there is an error with the rename, return the original file name
 sub _copy_file
 	{
+	require File::Copy;
+	
 	my( $self, $file, $base_dir ) = @_;
 	
 	my $pause_id = eval { $self->get_config->pause_id } || 'MYCPAN';
@@ -158,13 +162,32 @@ sub _copy_file
 		catfile( $base_dir, $self->_path_parts( $pause_id ), $basename )
 		);
 
-	my $rc = rename $file => $new_name;
-	$logger->error( "Could not rename [$file] to [$new_name]: $!" )
+	if( -e $new_name and 
+		$self->_file_md5( $new_name ) eq $self->_file_md5( $file ) )
+		{
+		$logger->debug( "Files [$file] and [$new_name] are the same. Not copying" );
+		}
+
+	my $rc = File::Copy::copy( $file => $new_name );
+	$logger->error( "Could not copy [$file] to [$new_name]: $!" )
 		unless $rc;
 
 	return $rc ? $new_name : $file;
 	}
 
+sub _file_md5
+	{
+	my( $self, $file ) = @_;
+	
+	require Digest::MD5;
+	
+	open my( $fh ), '<', $file or return '';
+	my $ctx = Digest::MD5::md5_hex;
+
+	$ctx->addfile($fh);
+
+ 	$ctx->hexdigest;
+	}
 1;
 
 =back
@@ -186,7 +209,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2010, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

@@ -6,7 +6,7 @@ use Log::Log4perl;
 
 use base qw(MyCPAN::Indexer::Component);
 use vars qw($VERSION $logger);
-$VERSION = '1.28_02';
+$VERSION = '1.28_07';
 
 =head1 NAME
 
@@ -55,7 +55,7 @@ sub do_interface
 		"\n";
 
 	print 'Processing ' . @{ $self->get_note('queue') } . " distributions\n";
-	print "One * = 1 distribution\n";
+	print "One + = 1 distribution\n";
 
 	my $count = 0;
 	while( 1 )
@@ -81,8 +81,12 @@ sub do_interface
 		print "\n" unless ++$count % 70;
 
 		}
-
 	print "\n";
+	
+	my $collator = $self->get_coordinator->get_note( 'collator' );
+	$collator->();
+	
+
 	}
 
 sub skip_tick    { '.' }
@@ -111,7 +115,7 @@ brian d foy, C<< <bdfoy@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2008-2009, brian d foy, All Rights Reserved.
+Copyright (c) 2008-2010, brian d foy, All Rights Reserved.
 
 You may redistribute this under the same terms as Perl itself.
 

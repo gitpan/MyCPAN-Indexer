@@ -24,6 +24,7 @@ WriteMakefile(
 		'Module::Extract::Namespaces'      => '0.14',
 		'Module::Extract::Use'             => '0.13',
 		'Module::Extract::VERSION'         => '0.13',
+		'List::Util'                       => '0',
 		'Parallel::ForkManager'            => '0',
 		'Probe::Perl'                      => '0',
 		'Test::More'                       => '0',
@@ -43,6 +44,8 @@ WriteMakefile(
 
 		'lib/Dispatcher/Parallel.pm' => '$(INST_LIBDIR)/Indexer/Dispatcher/Parallel.pm',
 		'lib/Dispatcher/Serial.pm'   => '$(INST_LIBDIR)/Indexer/Dispatcher/Serial.pm',
+
+		'lib/Collator/Null.pm'       => '$(INST_LIBDIR)/Indexer/Collator/Null.pm',
 
 		'lib/Indexer.pm'             => '$(INST_LIBDIR)/Indexer.pm',
 		'lib/NullTester.pm'          => '$(INST_LIBDIR)/Indexer/NullTester.pm',

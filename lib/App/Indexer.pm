@@ -13,9 +13,10 @@ use File::Path qw(mkpath);
 use File::Spec::Functions qw(catfile);
 use File::Temp qw(tempdir);
 use Getopt::Std;
+use List::Util qw(max);
 use Log::Log4perl;
 
-$VERSION = '1.28_02';
+$VERSION = '1.28_07';
 
 $|++;
 
@@ -34,16 +35,21 @@ my $report_dir = catfile( $cwd, 'indexer_reports' );
 
 my %Defaults = (
 	alarm                 => 15,
+#	backpan_dir           => cwd(),	
 	copy_bad_dists        => 0,
+	collator_class        => 'MyCPAN::Indexer::Collater::Null',
 	dispatcher_class      => 'MyCPAN::Indexer::Dispatcher::Parallel',
 	error_report_subdir   => catfile( $report_dir, 'errors'  ),
 	indexer_class         => 'MyCPAN::Indexer',
 	indexer_id            => 'Joe Example <joe@example.com>',
 	interface_class       => 'MyCPAN::Indexer::Interface::Text',
 	log_file_watch_time   => 30,
+#	merge_dirs            => undef,
 	organize_dists        => 0,
 	parallel_jobs         => 1,
 	pause_id              => 'MYCPAN',
+	pause_full_name       => "MyCPAN user <CENSORED>",
+	prefer_bin            => 0,
 	queue_class           => 'MyCPAN::Indexer::Queue',
 	report_dir            => $report_dir,
 	reporter_class        => 'MyCPAN::Indexer::Reporter::AsYAML',
@@ -84,15 +90,29 @@ sub adjust_config
 	my $coordinator = $application->get_coordinator;
 	my $config      = $coordinator->get_config;
 	
-	my @argv = $application->{args};
+	my( $backpan_dir, @merge_dirs ) = @{ $application->{args} };
 	
-	# set the directories to index
-	unless( $config->exists( 'backpan_dir') )
+	$config->set( 'backpan_dir', $backpan_dir ) if defined $backpan_dir;
+	$config->set( 'merge_dirs', join "\x00", @merge_dirs ) if @merge_dirs;
+	
+	# set the directories to index, either set in:
+		# first argument on the command line
+		# config file
+		# current working directory
+	unless( $config->get( 'backpan_dir' ) )
 		{
-		# At the moment, you can only set string values, so we have to
-		# cheat a bit. This should really come in as a ConfigReader
-		# subclass
-		$config->set( 'backpan_dir', @argv ? join( ' ', @argv ) : cwd() );
+		$config->set( 'backpan_dir', cwd() );
+		}
+
+	# in the config file, it's all a single line
+	if( $config->get( 'merge_dirs' ) )
+		{
+		my @dirs = 
+			grep { length } 
+			split /(?<!\\) /, 
+				$config->get( 'merge_dirs' ) || '';
+				
+		$config->set( 'merge_dirs', join "\x00", @dirs );
 		}
 
 	if( $config->exists( 'report_dir' ) )
@@ -112,8 +132,13 @@ sub adjust_config
 			|| 
 		$coordinator->get_note( 'log4perl_file' )
 			;
+
+	# Adjust for some environment variables
+	$ENV{'PREFER_BIN'} = 1 if $config->get( 'prefer_bin' );
 	
 	$config->set( 'log4perl_file', $log4perl_file ) if $log4perl_file;
+
+	return 1;
 	}
 
 sub new 
@@ -141,7 +166,8 @@ sub process_options
 	$application->{args} = [ @ARGV ]; # XXX: yuck
 
 	$Options{f} ||= catfile( $run_dir, "$script.conf" );
-	$Options{l} ||= catfile( $run_dir, "$script.log4perl" );
+	
+	#$Options{l} ||= catfile( $run_dir, "$script.log4perl" );
 	
 	$application->{options} = \%Options;
 	}
@@ -169,17 +195,24 @@ sub handle_config
 	{
 	my( $application ) = @_;
 
-	# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+	# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 	# Adjust config based on run parameters
 	my $config = $application->init_config( $application->get_option('f') );
 	$application->get_coordinator->set_config( $config );
 	
 	$application->adjust_config;
 
-	if( $application->get_option('c') )
+	if( $application->get_option( 'c' ) )
 		{
-		use Data::Dumper;
-		print STDERR Dumper( $config );
+		my @directives = $config->directives;
+		my $longest = max( map { length } @directives );
+		foreach my $directive ( sort @directives )
+			{
+			printf "%${longest}s   %-10s\n", 
+				$directive, 
+				$config->get( $directive );
+			}
+
 		exit;
 		}
 	}
@@ -228,12 +261,12 @@ sub run_components
 		
 	foreach my $tuple ( @components )
 		{
-		my( $directive, $default_class, $method ) = @$tuple;
+		my( $component_type, $default_class, $method ) = @$tuple;
 
-		my $class = $config->get( "${directive}_class" ) || $default_class;
+		my $class = $config->get( "${component_type}_class" ) || $default_class;
 
 		eval "require $class; 1" or die "$@\n";
-		die "$directive [$class] does not implement $method()"
+		die "$component_type [$class] does not implement $method()"
 			unless $class->can( $method );
 
 		$logger->debug( "Calling $class->$method()" );
@@ -242,7 +275,7 @@ sub run_components
 		$component->set_coordinator( $coordinator );
 		$component->$method();
 		
-		my $set_method = "set_$directive";
+		my $set_method = "set_${component_type}";
 		$coordinator->$set_method( $component );
 		}
 	}
@@ -275,18 +308,39 @@ sub setup_logging
 	my( $self ) = @_;
 
 	my $config   = $self->get_coordinator->get_config;
-	my $log_file = $config->get( 'log4perl_file' );
+
+	my $log_config = do {
+		no warnings 'uninitialized';
+		if( -e $ENV{MYCPAN_LOG4PERL_FILE} )
+			{
+			$ENV{MYCPAN_LOG4PERL_FILE};
+			}
+		elsif( -e $config->get( 'log4perl_file' ) ) 
+			{
+			$config->get( 'log4perl_file' );
+			}
+		};
 	
-	if( defined $log_file and -e $log_file )
+	if( defined $log_config )
 		{
 		Log::Log4perl->init_and_watch(
-			$log_file,
+			$log_config,
 			$self->get_coordinator->get_config->get( 'log_file_watch_time' )
 			);
 		}
 	else
-		{
-		Log::Log4perl->easy_init( $Log::Log4perl::ERROR );
+		{		
+		my %hash = (
+			DEBUG => $Log::Log4perl::DEBUG,
+			ERROR => $Log::Log4perl::ERROR,
+			WARN  => $Log::Log4perl::WARN,
+			FATAL => $Log::Log4perl::FATAL,
+			);
+			
+		my $level = defined $ENV{MYCPAN_LOGLEVEL} ? 
+			$ENV{MYCPAN_LOGLEVEL} : 'ERROR';
+		
+		Log::Log4perl->easy_init( $hash{$level} );
 		}
 	}
 
@@ -297,8 +351,8 @@ sub components
 	[ qw( dispatcher MyCPAN::Indexer::Dispatcher::Parallel get_dispatcher ) ],
 	[ qw( reporter   MyCPAN::Indexer::Reporter::AsYAML     get_reporter   ) ],
 	[ qw( worker     MyCPAN::Indexer::Worker               get_task       ) ],
+	[ qw( collator   MyCPAN::Indexer::Collator::Null       get_collator   ) ],
 	[ qw( interface  MyCPAN::Indexer::Interface::Curses    do_interface   ) ],
-	[ qw( reporter   MyCPAN::Indexer::Reporter::AsYAML     final_words    ) ],
 	)
 	}
 

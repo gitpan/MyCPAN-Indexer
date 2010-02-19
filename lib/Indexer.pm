@@ -9,7 +9,7 @@ no warnings;
 use subs qw(get_caller_info);
 use vars qw($VERSION $logger);
 
-$VERSION = '1.28_02';
+$VERSION = '1.28_07';
 
 =head1 NAME
 
@@ -1068,6 +1068,21 @@ file. It starts by calling C<get_file_info>, then adds more to
 the hash, including the version and package information.
 
 =cut
+
+sub get_modules_info
+	{
+        my $self = shift;
+	my @file_info = ();
+	foreach my $file ( @{ $self->dist_info( 'modules' ) } )
+		{
+		$logger->debug( "Processing module $file" );
+		my $hash = $self->get_module_info( $file );
+		push @file_info, $hash;
+		}
+
+	$self->set_dist_info( 'module_info', [ @file_info ] );
+	}
+
 
 sub get_module_info
 	{
