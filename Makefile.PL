@@ -1,76 +1,76 @@
-use ExtUtils::MakeMaker;
+use ExtUtils::MakeMaker 6.48;
 
-require 5.006;
+use v5.14.2;
 
 eval "use Test::Manifest 1.21";
 
+my %optional = (
+	Curses  => {
+		'lib/MyCPAN/Indexer/Interface/Curses.pm' => '$(INST_LIBDIR)/Indexer/Interface/Curses.pm',
+	
+		},
+	Tk      => {
+		'lib/MyCPAN/Indexer/Interface/Tk.pm' => '$(INST_LIBDIR)/Indexer/Interface/Tk.pm',
+		},
+	);
+
+foreach my $module ( keys %optional ) {
+	my $available = eval "require $module; 1";
+	
+	unless( $available ) {
+		print <<"HERE";
+$module not available. Skipping optional modules that use it.
+If you later want to use it, you'll have to reinstall MyCPAN.
+HERE
+
+		delete $optional{ $module };
+		}
+	}
+	
 WriteMakefile(
 	'NAME'	       => 'MyCPAN::Indexer',
 	'ABSTRACT'     => 'Index a Perl distribution',
-	'VERSION_FROM' => 'lib/Indexer.pm',
+	'VERSION_FROM' => 'lib/MyCPAN/Indexer.pm',
 	'LICENSE'      => 'perl',
 	'AUTHOR'       => 'brian d foy <bdfoy@cpan.org>',
 	
 	'PREREQ_PM'    => { 
-		'Archive::Extract'                 => '0', # 0.32 when it's available
-		'Archive::Tar'                     => '0',
+		'Archive::Extract::Libarchive'     => '0',
 		'ConfigReader::Simple'             => '0',
+		'CPAN::Checksums'                  => '0',
+		'CPAN::PackageDetails'             => '0.21',
+		'Data::Structure::Util'            => '0',
 		'Data::UUID'                       => '0',
-		'Distribution::Guess::BuildSystem' => '0.11',
-		'File::Find'                       => '0',
-		'File::Find::Closures'             => '0',
-		'Log::Log4perl'                    => '0',
 		'Digest::MD5'                      => '0',
+		'Distribution::Guess::BuildSystem' => '0.11',
+		'ExtUtils::MakeMaker'              => '6.48',
+		'File::Find::Closures'             => '0',
+		'File::Find'                       => '0',
+		'File::Which'                      => '0',
+		'List::Util'                       => '0',
+		'Log::Log4perl'                    => '0',
 		'Module::Extract::Namespaces'      => '0.14',
 		'Module::Extract::Use'             => '0.13',
 		'Module::Extract::VERSION'         => '0.13',
-		'List::Util'                       => '0',
 		'Parallel::ForkManager'            => '0',
 		'Probe::Perl'                      => '0',
-		'Test::More'                       => '0',
+		'Proc::ProcessTable'               => '0',
+		'Test::More'                       => '0.95',
 		'Test::Output'                     => '0.13',
+		'YAML::Syck'                       => '0',
+		'YAML::XS'                         => '0',
 		'YAML'                             => '0',
-		'CPAN::PackageDetails'             => '0.21',
-		'CPAN::Checksums'                  => '0',
 		},
-
-	'PM'           => {
-		'lib/Reporter/Base.pm'       => '$(INST_LIBDIR)/Indexer/Reporter/Base.pm',
-		'lib/Reporter/AsYAML.pm'     => '$(INST_LIBDIR)/Indexer/Reporter/AsYAML.pm',
-
-		'lib/Interface/Text.pm'      => '$(INST_LIBDIR)/Indexer/Interface/Text.pm',
-		'lib/Interface/Curses.pm'    => '$(INST_LIBDIR)/Indexer/Interface/Curses.pm',
-		'lib/Interface/Tk.pm'        => '$(INST_LIBDIR)/Indexer/Interface/Tk.pm',
-
-		'lib/Dispatcher/Parallel.pm' => '$(INST_LIBDIR)/Indexer/Dispatcher/Parallel.pm',
-		'lib/Dispatcher/Serial.pm'   => '$(INST_LIBDIR)/Indexer/Dispatcher/Serial.pm',
-
-		'lib/Collator/Null.pm'       => '$(INST_LIBDIR)/Indexer/Collator/Null.pm',
-
-		'lib/Indexer.pm'             => '$(INST_LIBDIR)/Indexer.pm',
-		'lib/NullTester.pm'          => '$(INST_LIBDIR)/Indexer/NullTester.pm',
-		'lib/Queue.pm'               => '$(INST_LIBDIR)/Indexer/Queue.pm',
-		'lib/TestCensus.pm'          => '$(INST_LIBDIR)/Indexer/TestCensus.pm',
-		'lib/Tutorial.pm'            => '$(INST_LIBDIR)/Indexer/Tutorial.pm',
-		'lib/Worker.pm'              => '$(INST_LIBDIR)/Indexer/Worker.pm',
-		'lib/Coordinator.pm'         => '$(INST_LIBDIR)/Indexer/Coordinator.pm',
-		'lib/Component.pm'           => '$(INST_LIBDIR)/Indexer/Component.pm',
-		'lib/Notes.pm'               => '$(INST_LIBDIR)/Indexer/Notes.pm',
-		
-		'lib/App/Indexer.pm'         => '$(INST_LIBDIR)/App/BackPAN/Indexer.pm',
-		},
-
-	'MAN3PODS'     => {},
 
 	clean  => { FILES    => q|MyCPAN-Indexer-*| },
-    (
-    ( $ExtUtils::MakeMaker::VERSION ge '6.46' )
-        ? (META_MERGE => {
-            resources => {
-                homepage    => 'http://github.com/briandfoy/mycpan-indexer/tree/master',
-                repository  => 'git://github.com/briandfoy/mycpan-indexer.git',
-            }
-        })
-        : ()
-    )
+
+	META_MERGE => {
+		no_index => {
+			directory => [ qw(t inc corpus) ],
+			},
+		resources => {
+			homepage    => 'http://github.com/briandfoy/mycpan-indexer/tree/master',
+			repository  => 'git://github.com/briandfoy/mycpan-indexer.git',
+			},
+        },
 	);
