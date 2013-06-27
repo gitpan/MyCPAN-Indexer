@@ -20,6 +20,7 @@ no_index:
     - t
     - inc
     - corpus
+    - test-corpus
 requires:
   Archive::Extract::Libarchive: 0
   CPAN::Checksums: 0
@@ -49,4 +50,4 @@ requires:
 resources:
   homepage: http://github.com/briandfoy/mycpan-indexer/tree/master
   repository: git://github.com/briandfoy/mycpan-indexer.git
-version: 1.28_11
+version: 1.28_12

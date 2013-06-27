@@ -19,7 +19,8 @@
          "inc",
          "t",
          "inc",
-         "corpus"
+         "corpus",
+         "test-corpus"
       ]
    },
    "prereqs" : {
@@ -70,5 +71,5 @@
          "url" : "git://github.com/briandfoy/mycpan-indexer.git"
       }
    },
-   "version" : "1.28_11"
+   "version" : "1.28_12"
 }
